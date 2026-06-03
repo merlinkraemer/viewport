@@ -1,5 +1,5 @@
 import './artboard.css';
-import { el } from '../design-system/utils/dom.js';
+import { el } from './dom.js';
 
 const pinIconHtml = `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

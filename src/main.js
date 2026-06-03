@@ -1,10 +1,10 @@
 import '../src/design-system/index.js';
-import { createCanvas } from './canvas/canvas.js';
-import { createSidebar } from './canvas/sidebar.js';
-import { createPinSidebar } from './canvas/pin-sidebar.js';
-import { loadInitialDocument, createDocumentStore } from './canvas/document-store.js';
-import { showTextDialog } from './canvas/sidebar-context-menu.js';
-import { getPrimaryArtboardNote, upsertArtboardPrimaryNote } from './canvas/notes.js';
+import { createCanvas } from './engine/canvas.js';
+import { createSidebar } from './engine/sidebar.js';
+import { createPinSidebar } from './engine/pin-sidebar.js';
+import { loadInitialDocument, createDocumentStore } from './engine/document-store.js';
+import { showTextDialog } from './engine/sidebar-context-menu.js';
+import { getPrimaryArtboardNote, upsertArtboardPrimaryNote } from './engine/notes.js';
 
 // Auto-discovery registry: discovers all *.artboard.js files in src/artboards
 const modules = import.meta.glob('./artboards/**/*.artboard.js', { eager: true });
