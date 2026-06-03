@@ -1,55 +1,68 @@
-# prototyping — fourfour UI canvas
+# Viewport
 
-An infinite-canvas **visualizer** for fourfour UI mockups. Agents author mockups as
-plain JS/CSS artboards; you pan/zoom to review them. Not the production app — but
-`src/design-system/` is built to lift into the Tauri frontend later.
+An infinite-canvas workspace for building and arranging **live, interactive UI components**.
+Think Figma, but the cards are real code: pan, zoom, group widgets into projects, pin panels
+side-by-side, annotate — and inspect everything natively in DevTools.
 
 ```bash
 npm install
-npm run dev      # http://localhost:5180
+npm run dev          # web, http://localhost:5182
+cargo tauri dev      # native window (from repo root, needs Rust toolchain)
 ```
 
-## The three layers (build bottom-up)
+## Two layers: engine vs. content
 
-1. **Primitive** — one reusable control (button, sidebar-row, track-row, waveform).
-   Lives in `src/design-system/components/<name>.{js,css}`. Factory
-   `createX(props) → { element, update?, destroy? }`. Styled only with `--ff-*` tokens
-   (`src/design-system/tokens.css`). Export it from `src/design-system/index.js`.
-2. **Module** — composes primitives into a self-contained unit (sidebar, track list,
-   player). An artboard.
-3. **Composite** — composes whole modules into a full-window screen (Browse, Curate).
-   An artboard. Adds no internal spacing of its own.
+Viewport is split so the **canvas engine** is content-agnostic and reusable across host
+projects (fourfour, graft_audio, …). A host supplies its own components; the engine never
+imports them.
 
-Need a control that doesn't exist? Build the primitive first, then use it. Don't inline
-one-off DOM where a primitive belongs.
+```
+src/
+  engine/          ← reusable canvas. NO imports from content. Pan/zoom (Konva-driven nav),
+                     sidebar, pin-sidebar, document store, overlap-snapping, notes.
+                     Ships tokens.css defaults; exposes createViewport().
+  design-system/   ← host content: this project's primitives + token overrides
+  artboards/       ← host content: *.artboard.js mockups, auto-discovered
+  main.js          ← thin host: globs artboards, defines layers, calls createViewport()
+```
+
+### The engine API
+
+```js
+import { createViewport } from './engine/index.js';
+
+createViewport({
+  mount,             // container element
+  registry,          // [{ id, sourceTitle, layer, render }]
+  layers,            // taxonomy: [{ key: 'primitive', label: 'Primitives' }, ...]
+  storageNamespace,  // localStorage key prefix, e.g. 'viewport'
+});
+```
+
+The engine references `--ff-*` design tokens and ships defaults in `engine/tokens.css`. A host
+overrides them by loading its own token sheet after the engine (load order wins). *(A future
+`--vp-*` rename would fully neutralize the naming; deferred to avoid churn.)*
 
 ## The artboard contract
 
-Every `src/artboards/**/*.artboard.js` is auto-discovered (`import.meta.glob`) — there is
-**no registration step**. Adding an artboard is adding a file.
+Every `src/artboards/**/*.artboard.js` is auto-discovered (`import.meta.glob`) — no registration.
+Adding an artboard is adding a file.
 
 ```js
-// src/artboards/track-list.artboard.js
-import { createTrackRow } from '../design-system/index.js';
-
-export const meta = { title: 'Track List', layer: 'module' }; // primitive | module | composite
+export const meta = { title: 'Track List', layer: 'module' };
 
 export default function render() {
   const el = document.createElement('div');
-  // build with design-system primitives + --ff-* tokens
-  return el; // the CONTENT element; the canvas wraps it in a titled card
+  // build content with host primitives + tokens
+  return el; // engine wraps it in a titled, draggable card
 }
 ```
 
-The filename (minus `.artboard.js`) is the artboard id. Layer determines its sidebar
-group and default canvas column.
+The filename (minus `.artboard.js`) is the artboard id. `layer` selects its sidebar group and
+default canvas column, per the `layers` taxonomy the host passes in.
 
-## Tokens
+## Persistence
 
-`src/design-system/tokens.css` is ported 1:1 from `../docs/design_system.md`, which stays
-the normative source. Use token vars by name; never hardcode colors/sizes.
-
-## Layout persistence
-
-Default layout is a deterministic grid (one column per layer). Manual drags are saved to
-`localStorage` only. "reset layout" in the sidebar clears them.
+localStorage, keyed by `storageNamespace`. Holds projects, layout, pins, notes, sidebar width,
+and manual drag overrides. Card overlaps snap apart on reload.
+*(Native file-based storage via the Tauri backend is a planned follow-up.)*
