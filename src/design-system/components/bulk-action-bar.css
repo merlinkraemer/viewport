@@ -1,0 +1,42 @@
+.ff-bulk-bar {
+  padding: 8px 14px;
+  background-color: var(--ff-elev);
+  border: 1px solid var(--ff-border-hi);
+  border-radius: var(--ff-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.ff-bulk-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-bulk-bar__count {
+  font-family: var(--ff-font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ff-text);
+}
+
+.ff-bulk-bar__separator {
+  color: var(--ff-faint);
+}
+
+.ff-bulk-bar__summary {
+  font-family: var(--ff-font);
+  font-size: 12px;
+  color: var(--ff-text-mid);
+}
+
+.ff-bulk-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+

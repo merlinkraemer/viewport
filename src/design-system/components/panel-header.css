@@ -1,0 +1,57 @@
+.ff-panel-header {
+  height: 40px;
+  padding: 0 14px;
+  background-color: var(--ff-surface);
+  border-bottom: 1px solid var(--ff-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.ff-panel-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ff-panel-header__left--full {
+  width: 100%;
+}
+
+.ff-panel-header__title {
+  font-family: var(--ff-font);
+  font-size: var(--ff-type-h2);
+  font-weight: 500;
+  color: var(--ff-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ff-panel-header__subtitle {
+  font-family: var(--ff-font);
+  font-size: var(--ff-type-caption);
+  color: var(--ff-text-mid);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ff-panel-header__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+
+
+/* Filtering mode layout tweak */
+.ff-panel-header--filtering .ff-panel-header__right {
+  display: none;
+}

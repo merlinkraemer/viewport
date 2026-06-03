@@ -1,0 +1,60 @@
+.ff-onboarding {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 24px;
+  background-color: var(--ff-bg);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius-xl);
+  gap: 14px;
+  max-width: 480px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  user-select: none;
+}
+
+.ff-onboarding__wordmark {
+  font-family: var(--ff-font);
+  font-size: var(--ff-type-display);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--ff-text);
+  margin: 0;
+  line-height: 1;
+}
+
+.ff-onboarding__message {
+  font-family: var(--ff-font);
+  font-size: var(--ff-type-body);
+  color: var(--ff-text-mid);
+  max-width: 380px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ff-onboarding__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+
+
+.ff-onboarding__hint {
+  font-family: var(--ff-font);
+  font-size: var(--ff-type-small);
+  color: var(--ff-faint);
+  margin-top: 4px;
+}
+
+.ff-onboarding__kbd {
+  font-family: var(--ff-font-mono);
+  font-size: 10px;
+  background-color: var(--ff-elev-hi);
+  border: 1px solid var(--ff-border-hi);
+  border-radius: var(--ff-radius-xs);
+  color: var(--ff-text-mid);
+  padding: 1px 3px;
+  box-sizing: border-box;
+}
