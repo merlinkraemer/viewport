@@ -1,6 +1,7 @@
+import { storageKey, getDefaultProjectName } from './config.js';
+
 const DOC_VERSION = 1;
 const DEFAULT_PROJECT_ID = 'default';
-const DOCUMENT_KEY = 'fourfour:canvas:document';
 const ARTBOARD_BASE_X = 48;
 const ARTBOARD_BASE_Y = 56;
 const ARTBOARD_COL_SPACING = 360;
@@ -46,7 +47,7 @@ export function createEmptyDocument() {
     projects: [
       {
         id: DEFAULT_PROJECT_ID,
-        name: 'fourfour',
+        name: getDefaultProjectName(),
         collapsed: false,
         frame: { x: 0, y: 0 },
         createdAt: nowIso(),
@@ -63,7 +64,7 @@ function ensureDefaultProject(doc) {
   if (!hasDefault) {
     doc.projects.unshift({
       id: DEFAULT_PROJECT_ID,
-      name: 'fourfour',
+      name: getDefaultProjectName(),
       collapsed: false,
       frame: { x: 0, y: 0 },
       createdAt: nowIso(),
@@ -385,7 +386,7 @@ export function resolveAllOverlaps(doc) {
 export function loadInitialDocument(registry) {
   let raw = null;
   try {
-    const data = localStorage.getItem(DOCUMENT_KEY);
+    const data = localStorage.getItem(storageKey('document'));
     raw = data ? JSON.parse(data) : null;
   } catch (err) {
     console.error('Failed to load canvas document from localStorage', err);
@@ -400,7 +401,7 @@ export function loadInitialDocument(registry) {
   const finalDoc = normalizeDocument(synced);
 
   try {
-    localStorage.setItem(DOCUMENT_KEY, JSON.stringify(finalDoc));
+    localStorage.setItem(storageKey('document'), JSON.stringify(finalDoc));
   } catch (err) {
     console.error('Failed to write initialized canvas document', err);
   }
@@ -417,7 +418,7 @@ export function createDocumentStore(initialDoc) {
     if (!hasPendingSave) return;
     hasPendingSave = false;
     try {
-      localStorage.setItem(DOCUMENT_KEY, JSON.stringify(doc));
+      localStorage.setItem(storageKey('document'), JSON.stringify(doc));
     } catch (err) {
       console.error('Failed to persist canvas document mutation', err);
     }
@@ -450,7 +451,7 @@ export function createDocumentStore(initialDoc) {
     saveNow() {
       hasPendingSave = false;
       try {
-        localStorage.setItem(DOCUMENT_KEY, JSON.stringify(doc));
+        localStorage.setItem(storageKey('document'), JSON.stringify(doc));
       } catch (err) {
         console.error('Failed to save document immediately', err);
       }

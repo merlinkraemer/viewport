@@ -1,4 +1,5 @@
 import './pin-sidebar.css';
+import { storageKey } from './config.js';
 
 export const pinIconHtml = `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -10,7 +11,6 @@ export const pinIconHtml = `
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 800;
-const WIDTH_KEY = 'fourfour-canvas-pin-sidebar-width';
 
 function debounce(fn, ms) {
   let timer;
@@ -25,7 +25,7 @@ function loadWidth(initialWidth) {
     return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, initialWidth));
   }
   try {
-    const raw = localStorage.getItem(WIDTH_KEY);
+    const raw = localStorage.getItem(storageKey('pin-sidebar-width'));
     const n = raw ? Number(raw) : DEFAULT_WIDTH;
     return Number.isFinite(n) ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n)) : DEFAULT_WIDTH;
   } catch {
@@ -204,7 +204,7 @@ export function createPinSidebar({ onLayoutChange, initialWidth } = {}) {
     }
     document.body.classList.remove('pin-sidebar-resizing');
     try {
-      localStorage.setItem(WIDTH_KEY, String(sidebarWidth));
+      localStorage.setItem(storageKey('pin-sidebar-width'), String(sidebarWidth));
     } catch {
       /* ignore */
     }
