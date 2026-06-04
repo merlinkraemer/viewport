@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer, normalizePath } from 'vite';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -219,14 +219,27 @@ function viewportVitePlugin(content) {
   };
 }
 
+// Optional Node-side Vite extension. A project may add `viewport.vite.js`
+// exporting `{ plugins: [...] }` (e.g. the Svelte plugin) to teach the dev
+// server new file types. Kept separate from `viewport.config.js`, which is
+// imported by the browser and must stay free of Node-only plugin imports.
+async function loadProjectVitePlugins(cwd) {
+  const vitePath = path.join(cwd, 'viewport.vite.js');
+  if (!exists(vitePath)) return [];
+  const mod = await import(pathToFileURL(vitePath).href);
+  const cfg = mod.default ?? mod;
+  return Array.isArray(cfg.plugins) ? cfg.plugins : [];
+}
+
 async function runDev(args) {
   const cwd = process.cwd();
   const content = resolveContentRoot(cwd);
+  const extraPlugins = await loadProjectVitePlugins(cwd);
   const server = await createServer({
     root: content.projectRoot,
     configFile: false,
     appType: 'custom',
-    plugins: [viewportVitePlugin(content)],
+    plugins: [viewportVitePlugin(content), ...extraPlugins],
     resolve: {
       alias: {
         '#design-system': path.dirname(content.designSystemIndex),
