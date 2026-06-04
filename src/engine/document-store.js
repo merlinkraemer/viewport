@@ -448,6 +448,12 @@ export function createDocumentStore(initialDoc) {
       return () => listeners.delete(listener);
     },
     mutate,
+    syncRegistry(registry) {
+      doc = normalizeDocument(syncRegistry(normalizeDocument(doc), registry));
+      hasPendingSave = true;
+      saveDebounced();
+      notify();
+    },
     saveNow() {
       hasPendingSave = false;
       try {

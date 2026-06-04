@@ -21,7 +21,7 @@ export { setEngineConfig };
  * @param {Array}   [opts.layers]          taxonomy [{ key, label }]
  * @param {string}  [opts.storageNamespace]
  * @param {string}  [opts.defaultProjectName]
- * @returns {{ documentStore, canvas, sidebar, pinSidebar }}
+ * @returns {{ documentStore, canvas, sidebar, pinSidebar, updateRegistry }}
  */
 export function createViewport({
   mount,
@@ -32,6 +32,7 @@ export function createViewport({
 } = {}) {
   if (!mount) throw new Error('createViewport: `mount` element is required');
   if (!Array.isArray(registry)) throw new Error('createViewport: `registry` array is required');
+  const activeRegistry = registry.slice();
 
   setEngineConfig({
     ...(layers ? { layers } : {}),
@@ -40,7 +41,7 @@ export function createViewport({
   });
 
   // Document + persistence
-  const bootstrapDoc = loadInitialDocument(registry);
+  const bootstrapDoc = loadInitialDocument(activeRegistry);
   const documentStore = createDocumentStore(bootstrapDoc);
 
   // Right pin sidebar
@@ -56,7 +57,7 @@ export function createViewport({
     viewport: mount,
     documentStore,
     pinSidebar,
-    registry,
+    registry: activeRegistry,
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
   });
 
@@ -177,7 +178,7 @@ export function createViewport({
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
       if (artboard.orphaned) return;
 
-      const regEntry = registry.find((r) => r.id === id);
+      const regEntry = activeRegistry.find((r) => r.id === id);
       const layer = regEntry ? regEntry.layer : 'primitive';
 
       const modelEntry = {
@@ -222,5 +223,13 @@ export function createViewport({
   // Resolve card overlaps once layout has measured real card sizes
   setTimeout(() => documentStore.resolveOverlaps(), 200);
 
-  return { documentStore, canvas, sidebar, pinSidebar };
+  function updateRegistry(nextRegistry, { changedIds } = {}) {
+    if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');
+    const idsToRefresh = changedIds || nextRegistry.map((entry) => entry.id);
+    activeRegistry.splice(0, activeRegistry.length, ...nextRegistry);
+    documentStore.syncRegistry(activeRegistry);
+    canvas.refreshArtboards(idsToRefresh);
+  }
+
+  return { documentStore, canvas, sidebar, pinSidebar, updateRegistry };
 }

@@ -3,6 +3,7 @@ import './sidebar.css';
 import './pin-sidebar.css';
 import Konva from 'konva';
 import { createArtboard } from './artboard.js';
+import { storageKey } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
 
@@ -15,6 +16,36 @@ const ARTBOARD_BASE_X = 48;
 const ARTBOARD_BASE_Y = 56;
 const ARTBOARD_COL_SPACING = 360;
 const ARTBOARD_ROW_SPACING = 300;
+
+function debounce(fn, ms) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function readStoredCamera() {
+  try {
+    const raw = localStorage.getItem(storageKey('camera'));
+    const camera = raw ? JSON.parse(raw) : null;
+    if (
+      camera &&
+      Number.isFinite(camera.x) &&
+      Number.isFinite(camera.y) &&
+      Number.isFinite(camera.scale)
+    ) {
+      return {
+        x: camera.x,
+        y: camera.y,
+        scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, camera.scale)),
+      };
+    }
+  } catch (err) {
+    console.error('Failed to load canvas camera from localStorage', err);
+  }
+  return null;
+}
 
 export function createCanvas({ viewport, documentStore, pinSidebar, registry, onSelectActiveArtboard }) {
   const cards = new Map(); // id -> { id, element, pinBtn, renameBtn, label }
@@ -50,6 +81,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
 
   let leftSidebarToggle;
   let pinSidebarToggle;
+  let zoomUI = null;
+  let zoomLevel = null;
 
   function updateSidebarToggles() {
     if (!leftSidebarToggle || !pinSidebarToggle) return;
@@ -121,6 +154,12 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     draggable: true,
   });
 
+  const storedCamera = readStoredCamera();
+  if (storedCamera) {
+    stage.scale({ x: storedCamera.scale, y: storedCamera.scale });
+    stage.position({ x: storedCamera.x, y: storedCamera.y });
+  }
+
   const bgLayer = new Konva.Layer();
   stage.add(bgLayer);
 
@@ -156,13 +195,27 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   viewport.appendChild(world);
 
   // ── 2b. Viewport Transform Syncing ──
-  function syncDOM() {
+  const persistCamera = debounce(() => {
+    try {
+      localStorage.setItem(storageKey('camera'), JSON.stringify({
+        x: stage.x(),
+        y: stage.y(),
+        scale: stage.scaleX(),
+      }));
+    } catch (err) {
+      console.error('Failed to persist canvas camera', err);
+    }
+  }, 160);
+
+  function syncDOM({ persist = true } = {}) {
     const s = stage.scaleX();
     const x = stage.x();
     const y = stage.y();
     world.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
     if (zoomLevel) zoomLevel.textContent = `${Math.round(s * 100)}%`;
+    if (persist) persistCamera();
   }
+  syncDOM({ persist: false });
 
   stage.on('dragmove', syncDOM);
   stage.on('dragend', syncDOM);
@@ -263,11 +316,28 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       pinBtn: el.pinBtn,
       renameBtn: el.renameBtn,
       label: el.titleEl,
+      bodyEl: el.bodyEl,
       dragBound: false,
       resizeObserver: ro,
     };
     cards.set(id, entry);
     return entry;
+  }
+
+  function refreshArtboard(id) {
+    const entry = cards.get(id);
+    if (!entry) return;
+    const reg = registry.find(item => item.id === id);
+    if (!reg) return;
+
+    const contentEl = reg.render();
+    entry.bodyEl.replaceChildren(contentEl);
+    entry.element.dataset.layer = reg.layer || 'primitive';
+    const currentDoc = documentStore.get();
+    const artboard = currentDoc.artboards[id];
+    const title = artboard ? getDisplayTitle(artboard) : (reg.sourceTitle || reg.id);
+    entry.label.textContent = title;
+    entry.element.titleEl.textContent = title;
   }
 
   function getDisplayTitle(artboardState) {
@@ -608,7 +678,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   }
 
   // Zoom control panel
-  const zoomUI = document.createElement('div');
+  zoomUI = document.createElement('div');
   zoomUI.className = 'zoom-controls';
 
   const zoomOut = document.createElement('button');
@@ -620,7 +690,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     animateCanvasTo(newScale, stage.x(), stage.y());
   });
 
-  const zoomLevel = document.createElement('span');
+  zoomLevel = document.createElement('span');
   zoomLevel.className = 'zoom-level';
   zoomLevel.textContent = '100%';
 
@@ -685,6 +755,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     centerOn,
     navigateToCanvasNode,
     showCopyToast,
+    refreshArtboard,
+    refreshArtboards(ids) {
+      ids.forEach(refreshArtboard);
+      pinSidebar.refreshAll();
+    },
     onSidebarLayoutChange(width, pinned, meta) {
       pinSidebarWidth = width;
       if (typeof pinned === 'boolean') {
