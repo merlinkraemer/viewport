@@ -91,16 +91,6 @@ export function createSidebar(options) {
   let archiveCollapsed = true;
   const subfolderCollapsed = {}; // Key format: `${projectId}:${subfolderName}` -> boolean
 
-  // Elegant dashed "+ New Project" button at the top
-  const newProjectBtn = document.createElement('button');
-  newProjectBtn.type = 'button';
-  newProjectBtn.className = 'sidebar-new-project-btn';
-  newProjectBtn.innerHTML = '<span>+ New Project</span>';
-  newProjectBtn.addEventListener('click', () => {
-    const name = window.prompt('Project name');
-    if (name && name.trim()) options.onCreateProject?.(name.trim());
-  });
-
   // Resizable handle element
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'sidebar-resize';
@@ -431,7 +421,6 @@ export function createSidebar(options) {
     scroll.innerHTML = '';
     stickyBottom.innerHTML = '';
 
-    scroll.appendChild(newProjectBtn);
     scroll.appendChild(buildProjectsSection());
     stickyBottom.appendChild(buildArchiveSection());
     setActiveStyles();

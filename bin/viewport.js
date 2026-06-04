@@ -106,14 +106,25 @@ function rootImportPath(root, filePath) {
 
 function createVirtualEntry(content) {
   const artboards = listArtboards(content.artboardsDir);
-  if (!artboards.length) {
-    throw new Error(`No *.artboard.js files found in ${content.artboardsDir}`);
-  }
   if (!exists(content.designSystemIndex)) {
     throw new Error(`Missing design-system entry: ${content.designSystemIndex}`);
   }
 
   const hotDeps = artboards.map((filePath) => `'${rootImportPath(content.projectRoot, filePath)}'`).join(', ');
+  const hotAcceptCode = artboards.length ? `
+if (import.meta.hot) {
+  import.meta.hot.accept([${hotDeps}], (updatedModules) => {
+    const changedIds = [];
+    updatedModules.forEach((mod, index) => {
+      if (!mod) return;
+      const path = modulePaths[index];
+      modules[path] = mod;
+      changedIds.push(artboardId(path));
+    });
+    app.updateRegistry(createRegistry(modules), { changedIds });
+  });
+}
+` : '';
   const configCode = content.configImport
     ? `import projectConfig from '${content.configImport}';\nconst config = projectConfig || {};`
     : `const config = ${JSON.stringify(content.fallbackConfig, null, 2)};`;
@@ -156,19 +167,7 @@ const app = createViewport({
   ],
 });
 window.__viewportApp = app;
-
-if (import.meta.hot) {
-  import.meta.hot.accept([${hotDeps}], (updatedModules) => {
-    const changedIds = [];
-    updatedModules.forEach((mod, index) => {
-      if (!mod) return;
-      const path = modulePaths[index];
-      modules[path] = mod;
-      changedIds.push(artboardId(path));
-    });
-    app.updateRegistry(createRegistry(modules), { changedIds });
-  });
-}
+${hotAcceptCode}
 `;
 }
 

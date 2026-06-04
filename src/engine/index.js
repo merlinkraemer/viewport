@@ -63,13 +63,6 @@ export function createViewport({
 
   // Left tree sidebar
   const sidebar = createSidebar({
-    onCreateProject(name) {
-      const newId = documentStore.createProject(name);
-      if (!newId) return;
-      documentStore.mutate((draft) => {
-        draft.ui.activeProjectId = newId;
-      });
-    },
     onSelectActiveProject(projectId) {
       documentStore.mutate((draft) => {
         draft.ui.activeProjectId = projectId;
