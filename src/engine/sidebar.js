@@ -58,6 +58,26 @@ function makeListReorderable(listContainer, onReorder) {
   });
 }
 
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function createBuildLabel(build) {
+  const label = document.createElement('span');
+  label.className = 'sidebar-footer-text sidebar-build';
+  if (!build) {
+    label.textContent = 'dev server';
+    return label;
+  }
+  const at = new Date(build.builtAt);
+  const time = `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+  const sha = `${build.sha ?? 'no-git'}${build.dirty ? '+' : ''}`;
+  label.textContent = `build ${sha} · ${time} · ${build.hash}`;
+  label.title = `Built ${build.builtAt}. "+" means uncommitted changes. Compare the hash with build.json.`;
+  label.dataset.buildHash = build.hash;
+  return label;
+}
+
 function getDisplayName(artboard) {
   return artboard.displayName || artboard.sourceTitle;
 }
@@ -80,10 +100,7 @@ export function createSidebar(options) {
 
   const footer = document.createElement('div');
   footer.className = 'sidebar-footer';
-  const footerText = document.createElement('span');
-  footerText.className = 'sidebar-footer-text';
-  footerText.textContent = 'canvas-document v1';
-  footer.appendChild(footerText);
+  footer.appendChild(createBuildLabel(options.build));
   sidebar.appendChild(footer);
 
   let model = null;

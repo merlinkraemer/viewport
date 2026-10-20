@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createServer, normalizePath } from 'vite';
+import { build, createServer, normalizePath, preview } from 'vite';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY_URL = '/@viewport/entry.js';
@@ -12,22 +14,26 @@ function usage() {
   return `viewport
 
 Usage:
-  viewport [--port 5182] [--host 127.0.0.1] [--no-open]
-  viewport init
+  viewport [--port 5182] [--host 127.0.0.1] [--no-open]   dev server with HMR
+  viewport init                                          scaffold viewport/ in this project
+  viewport build [--out viewport/dist]                   static review build + build.json
+  viewport preview [--port 4182] [--host 0.0.0.0]        serve the review build
 `;
 }
 
 function parseArgs(argv) {
-  const args = { command: 'dev', open: true, host: undefined, port: 5182 };
+  const args = { command: 'dev', open: true, host: undefined, port: undefined, out: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === 'init') args.command = 'init';
+    if (['init', 'build', 'preview'].includes(arg)) args.command = arg;
+    else if (arg === '--out') args.out = argv[++i];
     else if (arg === '--no-open') args.open = false;
     else if (arg === '--host') args.host = argv[++i];
     else if (arg === '--port') args.port = Number(argv[++i]);
     else if (arg === '-h' || arg === '--help') args.command = 'help';
     else throw new Error(`Unknown argument: ${arg}\n\n${usage()}`);
   }
+  args.port ??= args.command === 'preview' ? 4182 : 5182;
   if (!Number.isFinite(args.port)) throw new Error('--port must be a number');
   return args;
 }
@@ -67,6 +73,7 @@ function resolveContentRoot(cwd) {
       artboardImportPrefix: '/viewport/artboards/',
       artboardGlob: '/viewport/artboards/**/*.artboard.js',
       designSystemImport: '/viewport/design-system/index.js',
+      distDir: path.join(projectViewport, 'dist'),
       configImport: exists(path.join(cwd, 'viewport.config.js')) ? '/viewport.config.js' : null,
       fallbackConfig: {},
     };
@@ -84,6 +91,7 @@ function resolveContentRoot(cwd) {
       artboardImportPrefix: '/src/artboards/',
       artboardGlob: '/src/artboards/**/*.artboard.js',
       designSystemImport: '/src/design-system/index.js',
+      distDir: path.join(packageRoot, 'dist'),
       configImport: null,
       fallbackConfig: {
         storageNamespace: 'viewport',
@@ -104,7 +112,7 @@ function rootImportPath(root, filePath) {
   return `/${normalizePath(path.relative(root, filePath))}`;
 }
 
-function createVirtualEntry(content) {
+function createVirtualEntry(content, buildInfo) {
   const artboards = listArtboards(content.artboardsDir);
   if (!exists(content.designSystemIndex)) {
     throw new Error(`Missing design-system entry: ${content.designSystemIndex}`);
@@ -158,6 +166,7 @@ function createRegistry(sourceModules) {
 const app = createViewport({
   mount: document.getElementById('viewport'),
   registry: createRegistry(modules),
+  build: ${JSON.stringify(buildInfo)},
   storageNamespace: config.storageNamespace ?? 'viewport',
   defaultProjectName: config.defaultProjectName ?? 'Default',
   layers: config.layers ?? [
@@ -171,26 +180,8 @@ ${hotAcceptCode}
 `;
 }
 
-function viewportVitePlugin(content) {
-  return {
-    name: 'viewport-host',
-    resolveId(id) {
-      if (id === ENTRY_URL) return VIRTUAL_ENTRY_ID;
-      return null;
-    },
-    load(id) {
-      if (id === VIRTUAL_ENTRY_ID) return createVirtualEntry(content);
-      return null;
-    },
-    configureServer(server) {
-      server.watcher.add(content.viewportDir);
-      server.middlewares.use(async (req, res, next) => {
-        const url = req.url || '/';
-        if (req.method !== 'GET' || (url !== '/' && !url.startsWith('/?'))) {
-          next();
-          return;
-        }
-        const html = await server.transformIndexHtml(url, `<!doctype html>
+function hostHtml() {
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -204,7 +195,31 @@ function viewportVitePlugin(content) {
     <div id="viewport"></div>
     <script type="module" src="${ENTRY_URL}"></script>
   </body>
-</html>`);
+</html>`;
+}
+
+function viewportVitePlugin(content, { buildInfo = null, htmlEntry = null } = {}) {
+  return {
+    name: 'viewport-host',
+    resolveId(id) {
+      if (id === ENTRY_URL) return VIRTUAL_ENTRY_ID;
+      if (htmlEntry && id === htmlEntry) return htmlEntry;
+      return null;
+    },
+    load(id) {
+      if (id === VIRTUAL_ENTRY_ID) return createVirtualEntry(content, buildInfo);
+      if (htmlEntry && id === htmlEntry) return hostHtml();
+      return null;
+    },
+    configureServer(server) {
+      server.watcher.add(content.viewportDir);
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url || '/';
+        if (req.method !== 'GET' || (url !== '/' && !url.startsWith('/?'))) {
+          next();
+          return;
+        }
+        const html = await server.transformIndexHtml(url, hostHtml());
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/html');
         res.end(html);
@@ -219,16 +234,16 @@ function viewportVitePlugin(content) {
   };
 }
 
-// Optional Node-side Vite extension. A project may add `viewport.vite.js`
-// exporting `{ plugins: [...] }` (e.g. the Svelte plugin) to teach the dev
-// server new file types. Kept separate from `viewport.config.js`, which is
-// imported by the browser and must stay free of Node-only plugin imports.
 async function loadProjectVitePlugins(cwd) {
   const vitePath = path.join(cwd, 'viewport.vite.js');
   if (!exists(vitePath)) return [];
   const mod = await import(pathToFileURL(vitePath).href);
   const cfg = mod.default ?? mod;
   return Array.isArray(cfg.plugins) ? cfg.plugins : [];
+}
+
+function designSystemAlias(content) {
+  return { '#design-system': path.dirname(content.designSystemIndex) };
 }
 
 async function runDev(args) {
@@ -240,11 +255,7 @@ async function runDev(args) {
     configFile: false,
     appType: 'custom',
     plugins: [viewportVitePlugin(content), ...extraPlugins],
-    resolve: {
-      alias: {
-        '#design-system': path.dirname(content.designSystemIndex),
-      },
-    },
+    resolve: { alias: designSystemAlias(content) },
     server: {
       host: args.host,
       port: args.port,
@@ -255,6 +266,95 @@ async function runDev(args) {
     },
   });
   await server.listen();
+  server.printUrls();
+}
+
+function git(cwd, gitArgs) {
+  try {
+    return execFileSync('git', gitArgs, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function listFiles(dir, skipDirs) {
+  if (!exists(dir)) return [];
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!skipDirs.includes(fullPath) && entry.name !== 'node_modules') out.push(...listFiles(fullPath, skipDirs));
+    } else if (entry.isFile()) out.push(fullPath);
+  }
+  return out;
+}
+
+function contentHash(content, outDir) {
+  const files = [
+    ...listFiles(content.viewportDir, [outDir]),
+    ...listFiles(path.join(packageRoot, 'src', 'engine'), []),
+    ...[content.configPath, path.join(content.projectRoot, 'viewport.vite.js')].filter((file) => file && exists(file)),
+  ].sort();
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(path.relative(content.projectRoot, file));
+    hash.update('\0');
+    hash.update(fs.readFileSync(file));
+    hash.update('\0');
+  }
+  return hash.digest('hex').slice(0, 8);
+}
+
+function createBuildInfo(content, outDir) {
+  const root = content.projectRoot;
+  const relOut = normalizePath(path.relative(root, outDir));
+  const status = git(root, ['status', '--porcelain', '--', '.', `:(exclude)${relOut}`]);
+  return {
+    sha: git(root, ['rev-parse', '--short', 'HEAD']),
+    dirty: status === null ? null : status.length > 0,
+    builtAt: new Date().toISOString(),
+    hash: contentHash(content, outDir),
+  };
+}
+
+async function runBuild(args) {
+  const cwd = process.cwd();
+  const content = resolveContentRoot(cwd);
+  const outDir = args.out ? path.resolve(cwd, args.out) : content.distDir;
+  const buildInfo = createBuildInfo(content, outDir);
+  const htmlEntry = path.join(content.projectRoot, 'index.html');
+  const extraPlugins = await loadProjectVitePlugins(cwd);
+  await build({
+    root: content.projectRoot,
+    configFile: false,
+    base: './',
+    logLevel: 'warn',
+    plugins: [viewportVitePlugin(content, { buildInfo, htmlEntry }), ...extraPlugins],
+    resolve: { alias: designSystemAlias(content) },
+    build: {
+      outDir,
+      emptyOutDir: true,
+      rollupOptions: { input: htmlEntry },
+    },
+  });
+  fs.writeFileSync(path.join(outDir, 'build.json'), `${JSON.stringify(buildInfo, null, 2)}\n`);
+  const sha = `${buildInfo.sha ?? 'no-git'}${buildInfo.dirty ? '+' : ''}`;
+  console.log(`Built ${path.relative(cwd, outDir) || '.'}  build ${sha}  hash ${buildInfo.hash}`);
+}
+
+async function runPreview(args) {
+  const cwd = process.cwd();
+  const content = resolveContentRoot(cwd);
+  const outDir = args.out ? path.resolve(cwd, args.out) : content.distDir;
+  if (!exists(path.join(outDir, 'build.json'))) {
+    throw new Error(`No review build in ${outDir}. Run "viewport build" first.`);
+  }
+  const server = await preview({
+    root: content.projectRoot,
+    configFile: false,
+    build: { outDir },
+    preview: { host: args.host, port: args.port, open: args.open, strictPort: true },
+  });
   server.printUrls();
 }
 
@@ -278,6 +378,15 @@ function updatePackageJson(cwd) {
   fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
+function ignoreReviewBuild(cwd) {
+  const ignorePath = path.join(cwd, '.gitignore');
+  const line = 'viewport/dist/';
+  const current = exists(ignorePath) ? fs.readFileSync(ignorePath, 'utf8') : '';
+  if (current.split('\n').some((entry) => entry.trim() === line)) return;
+  const separator = current && !current.endsWith('\n') ? '\n' : '';
+  fs.writeFileSync(ignorePath, `${current}${separator}${line}\n`);
+}
+
 function runInit() {
   const cwd = process.cwd();
   const viewportDir = path.join(cwd, 'viewport');
@@ -288,7 +397,13 @@ function runInit() {
   copyDir(path.join(packageRoot, 'templates', 'viewport'), viewportDir);
   fs.copyFileSync(path.join(packageRoot, 'templates', 'viewport.config.js'), configPath);
   updatePackageJson(cwd);
-  console.log('Created viewport/ scaffold and added package.json script "viewport".');
+  ignoreReviewBuild(cwd);
+  console.log(`Created viewport/ scaffold, package.json script "viewport" and .gitignore entry viewport/dist/.
+
+Agent skill: viewport/SKILL.md. For Claude Code, copy it into the project skills:
+  mkdir -p .claude/skills/viewport && cp viewport/SKILL.md .claude/skills/viewport/SKILL.md
+
+Next: npx viewport`);
 }
 
 async function main() {
@@ -299,6 +414,14 @@ async function main() {
   }
   if (args.command === 'init') {
     runInit();
+    return;
+  }
+  if (args.command === 'build') {
+    await runBuild(args);
+    return;
+  }
+  if (args.command === 'preview') {
+    await runPreview(args);
     return;
   }
   await runDev(args);

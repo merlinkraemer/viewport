@@ -30,6 +30,7 @@ export function createViewport({
   layers,
   storageNamespace,
   defaultProjectName,
+  build = null,
 } = {}) {
   if (!mount) throw new Error('createViewport: `mount` element is required');
   if (!Array.isArray(registry)) throw new Error('createViewport: `registry` array is required');
@@ -64,6 +65,7 @@ export function createViewport({
 
   // Left tree sidebar
   const sidebar = createSidebar({
+    build,
     onSelectActiveProject(projectId) {
       documentStore.mutate((draft) => {
         draft.ui.activeProjectId = projectId;
