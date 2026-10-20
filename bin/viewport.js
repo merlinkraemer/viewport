@@ -305,10 +305,23 @@ function contentHash(content, outDir) {
   return hash.digest('hex').slice(0, 8);
 }
 
+function hashedInputPaths(content) {
+  const root = content.projectRoot;
+  return [
+    content.viewportDir,
+    path.join(packageRoot, 'src', 'engine'),
+    content.configPath,
+    path.join(root, 'viewport.vite.js'),
+  ]
+    .filter(Boolean)
+    .map((file) => normalizePath(path.relative(root, file)))
+    .filter((rel) => !rel.startsWith('..'));
+}
+
 function createBuildInfo(content, outDir) {
   const root = content.projectRoot;
   const relOut = normalizePath(path.relative(root, outDir));
-  const status = git(root, ['status', '--porcelain', '--', '.', `:(exclude)${relOut}`]);
+  const status = git(root, ['status', '--porcelain', '--', ...hashedInputPaths(content), `:(exclude)${relOut}`]);
   return {
     sha: git(root, ['rev-parse', '--short', 'HEAD']),
     dirty: status === null ? null : status.length > 0,
