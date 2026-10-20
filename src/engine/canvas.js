@@ -643,6 +643,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       .map((entry) => entry.element.getBoundingClientRect());
     if (!rects.length) return;
     fitClientRect({
+      maxScale: 1,
       left: Math.min(...rects.map((r) => r.left)),
       top: Math.min(...rects.map((r) => r.top)),
       width: Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left)),
@@ -666,7 +667,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const availW = vpW * 0.8;
     const availH = vpH * 0.8;
     const fitScale = Math.min(availW / worldW, availH / worldH);
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fitScale));
+    const newScale = Math.max(MIN_SCALE, Math.min(rect.maxScale ?? MAX_SCALE, fitScale));
 
     const vpCenterX = leftWidth + vpW / 2;
     const vpCenterY = vpH / 2;

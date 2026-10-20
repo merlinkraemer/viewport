@@ -9,7 +9,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ff-space-5);
+  flex-wrap: wrap;
+  gap: var(--ff-space-2) var(--ff-space-5);
   padding: 0 var(--ff-space-1) var(--ff-space-3);
   width: 100%;
 }
@@ -31,6 +32,7 @@
   font-family: var(--ff-font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--ff-text-mid);
 }
 
@@ -53,7 +55,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  max-width: 360px;
 }
 
 .ff-card__id:hover {
@@ -75,6 +77,7 @@
 .ff-card__dims {
   font-size: var(--ff-type-label-sm);
   font-family: var(--ff-font-mono);
+  white-space: nowrap;
   color: var(--ff-faint);
 }
 

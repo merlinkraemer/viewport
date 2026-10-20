@@ -1,6 +1,3 @@
-/* ── Infinite canvas — Konva Stage + DOM overlay (fourfour Theme) ── */
-
-/* Viewport: full screen container for Konva canvas + DOM overlay */
 .canvas-viewport {
   position: absolute;
   top: 0;
@@ -13,10 +10,6 @@
   touch-action: none;
 }
 
-/* Konva creates its <canvas> inside .canvas-viewport — it sits at z-index 0.
-   The DOM overlay sits on top at z-index 1 with pointer-events: none
-   so drag/wheel events fall through to Konva. */
-
 .canvas-world {
   position: absolute;
   top: 0;
@@ -27,9 +20,6 @@
   padding: var(--ff-space-8);
 }
 
-/* ── CRITICAL DEVTOOLS FIX ──
-   Interactive cards inside the overlay MUST have pointer-events: auto so that
-   DevTools inspection picker, mouse clicks, and hovers work natively on them. */
 .ff-card,
 .module-card,
 .primitive-card,
@@ -41,8 +31,6 @@
 .project-frame-collapse {
   pointer-events: auto !important;
 }
-
-/* ── Zoom controls (fixed, above everything) ── */
 .zoom-controls {
   position: fixed;
   bottom: var(--ff-space-7);
@@ -91,8 +79,6 @@
   color: var(--ff-text);
   font-variant-numeric: tabular-nums;
 }
-
-/* ── Hint ── */
 .canvas-hint {
   position: fixed;
   top: var(--ff-space-7);
@@ -116,8 +102,6 @@
 .canvas-hint.hidden {
   opacity: 0;
 }
-
-/* ── Sidebar edge toggles ── */
 .sidebar-edge-toggle {
   position: fixed;
   top: 50%;
@@ -170,8 +154,6 @@
 .sidebar-edge-toggle--right[data-open="false"]::before {
   content: '‹';
 }
-
-/* ── Canvas rows ── */
 .canvas-row {
   margin-bottom: var(--ff-space-9);
 }
@@ -192,8 +174,6 @@
   align-items: flex-start;
   gap: var(--ff-space-8);
 }
-
-/* ── Primitive cards ── */
 .primitive-card {
   display: flex;
   flex-direction: column;
@@ -222,8 +202,6 @@
   color: var(--ff-muted);
   font-family: var(--ff-font-mono);
 }
-
-/* ── Artboard container (styled to match fourfour cards) ── */
 .artboard {
   flex-shrink: 0;
   border: 1px solid var(--ff-border);
@@ -286,8 +264,6 @@
   color: var(--ff-text);
   background: var(--ff-hover);
 }
-
-/* ── Module card: external label above the artboard box ── */
 .module-card {
   display: flex;
   flex-direction: column;
@@ -306,8 +282,6 @@
   color: var(--ff-muted);
   font-variant-numeric: tabular-nums;
 }
-
-/* ── Collapsible Canvas Section ── */
 .canvas-section-group {
   margin-bottom: var(--ff-space-9);
   border: 1px solid var(--ff-border);
@@ -372,8 +346,6 @@
 .canvas-section-content--collapsed {
   display: none;
 }
-
-/* --- Integration document canvas layout --- */
 .project-frames-layer {
   position: relative;
   min-width: 1600px;
@@ -382,6 +354,7 @@
 
 .project-inline-toggle {
   position: absolute;
+  white-space: nowrap;
   border: 1px solid var(--ff-border);
   border-radius: var(--ff-radius-xl);
   background: var(--ff-surface);
