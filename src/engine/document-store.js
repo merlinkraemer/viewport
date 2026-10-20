@@ -321,7 +321,6 @@ export function resolveAllOverlaps(doc) {
       return artboard.projectId === project.id && !artboard.archived && !artboard.orphaned;
     });
 
-    // Sort by coordinate flow (top-to-bottom, left-to-right) so top-left items act as anchors
     ids.sort((a, b) => {
       const posA = doc.artboards[a].position;
       const posB = doc.artboards[b].position;

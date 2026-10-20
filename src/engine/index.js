@@ -1,9 +1,3 @@
-/*
- * Viewport engine — public entry. A host calls createViewport() with its own
- * artboard registry; everything below (stores, canvas, sidebars, the wiring
- * between them) is content-agnostic. The host supplies WHAT to show; the
- * engine owns HOW it's shown, persisted, and navigated.
- */
 import { setEngineConfig, artboardGroup, LAYER_GROUPS } from './config.js';
 import { createCanvas } from './canvas.js';
 import { createSidebar } from './sidebar.js';
@@ -18,10 +12,11 @@ export { setEngineConfig };
 /**
  * @param {object}  opts
  * @param {Element} opts.mount             container for the canvas viewport
- * @param {Array}   opts.registry          [{ id, sourceTitle, layer, render }]
+ * @param {Array}   opts.registry          [{ id, sourceTitle, layer, render, file?, group? }]
  * @param {Array}   [opts.layers]          taxonomy [{ key, label }]
  * @param {string}  [opts.storageNamespace]
  * @param {string}  [opts.defaultProjectName]
+ * @param {object}  [opts.build]           review build stamp { sha, dirty, builtAt, hash }; null in dev
  * @returns {{ documentStore, canvas, sidebar, pinSidebar, updateRegistry }}
  */
 export function createViewport({
@@ -42,11 +37,9 @@ export function createViewport({
     ...(defaultProjectName ? { defaultProjectName } : {}),
   });
 
-  // Document + persistence
   const bootstrapDoc = loadInitialDocument(activeRegistry);
   const documentStore = createDocumentStore(bootstrapDoc);
 
-  // Right pin sidebar
   const pinSidebar = createPinSidebar({
     onLayoutChange(width, pinned, meta) {
       canvas.onSidebarLayoutChange(width, pinned, meta);
@@ -54,7 +47,6 @@ export function createViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
-  // Central canvas
   const canvas = createCanvas({
     viewport: mount,
     documentStore,
@@ -63,7 +55,6 @@ export function createViewport({
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
   });
 
-  // Left tree sidebar
   const sidebar = createSidebar({
     build,
     onSelectActiveProject(projectId) {
@@ -178,7 +169,6 @@ export function createViewport({
   });
   document.body.appendChild(sidebar.element);
 
-  // Map document state → sidebar explorer model
   function buildSidebarModel(documentState) {
     const artboardsByProject = {};
     documentState.projects.forEach((project) => {
@@ -226,18 +216,15 @@ export function createViewport({
     };
   }
 
-  // Re-render on every mutation
   documentStore.subscribe((state) => {
     canvas.render(state);
     sidebar.render(buildSidebarModel(state));
   });
 
-  // Initial render
   const initialState = documentStore.get();
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
 
-  // Resolve card overlaps once layout has measured real card sizes
   setTimeout(() => documentStore.resolveOverlaps(), 200);
 
   function updateRegistry(nextRegistry, { changedIds } = {}) {

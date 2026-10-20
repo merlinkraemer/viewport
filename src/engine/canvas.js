@@ -49,8 +49,8 @@ function readStoredCamera() {
 }
 
 export function createCanvas({ viewport, documentStore, pinSidebar, registry, onSelectActiveArtboard }) {
-  const cards = new Map(); // id -> { id, element, pinBtn, renameBtn, label }
-  const projectFrames = new Map(); // projectId -> ProjectFrame components
+  const cards = new Map();
+  const projectFrames = new Map();
   let copyToast = null;
   const selectedIds = new Set();
 
@@ -148,7 +148,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     return btn;
   }
 
-  // ── 1. Create Konva Stage for Panning/Zooming and Grid ──
   const stage = new Konva.Stage({
     container: viewport,
     width: getCanvasWidth(),
@@ -165,7 +164,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   const bgLayer = new Konva.Layer();
   stage.add(bgLayer);
 
-  // Large background rect as drag target
   bgLayer.add(new Konva.Rect({
     x: -10000,
     y: -10000,
@@ -175,7 +173,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     listening: true,
   }));
 
-  // Render grid dots
   const gridSpacing = 40;
   const gridRange = 3000;
   for (let x = -gridRange; x <= gridRange; x += gridSpacing) {
@@ -190,13 +187,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   }
   bgLayer.draw();
 
-  // ── 2. Create DOM Overlay after Konva wipes the container ──
   const world = document.createElement('div');
   world.id = 'world';
   world.className = 'canvas-world';
   viewport.appendChild(world);
 
-  // ── 2b. Viewport Transform Syncing ──
   const persistCamera = debounce(() => {
     try {
       localStorage.setItem(storageKey('camera'), JSON.stringify({
@@ -222,7 +217,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   stage.on('dragmove', syncDOM);
   stage.on('dragend', syncDOM);
 
-  // Convert client cursor coords to scaled world coords
   function clientToWorld(clientX, clientY) {
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
@@ -232,7 +226,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     };
   }
 
-  // ── 3. Wheel: scale-aware trackpad pan & zoom-to-cursor ──
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
 
@@ -241,7 +234,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const py = e.clientY - r.top;
 
     if (e.ctrlKey || e.metaKey) {
-      // Zoom toward cursor
       const oldScale = stage.scaleX();
       const mousePointTo = {
         x: (px - stage.x()) / oldScale,
@@ -263,7 +255,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       stage.batchDraw();
       syncDOM();
     } else {
-      // Panning divided by scale so trackpad swipes stay 1:1 at all zooms
       const scale = stage.scaleX();
       const dx = e.deltaX / scale;
       const dy = e.deltaY / scale;
@@ -276,7 +267,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     }
   }, { passive: false });
 
-  // ── 4. Card Mount & Interaction Bindings ──
   function ensureCardEntry(id) {
     if (cards.has(id)) return cards.get(id);
 
@@ -403,7 +393,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       copyIds([...selectedIds]);
     });
 
-    // Pin Toggle
     entry.pinBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       documentStore.mutate((draft) => {
@@ -417,7 +406,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       });
     });
 
-    // Rename Dialog
     entry.renameBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       const currentDoc = documentStore.get();
@@ -431,7 +419,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       });
     });
 
-    // Pointer Drag Handle
     const dragHandle = entry.element.handle;
     dragHandle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
@@ -446,7 +433,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       const startPointer = clientToWorld(event.clientX, event.clientY);
       const startPosition = { ...artboard.position };
 
-      // Temporarily disable Konva stage panning while dragging card
       stage.draggable(false);
       entry.element.classList.add('module-card--dragging');
       const pointerId = event.pointerId;
@@ -468,7 +454,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         window.removeEventListener('pointerup', handleUp);
         window.removeEventListener('pointercancel', handleUp);
 
-        // Re-enable Konva stage panning
         stage.draggable(true);
         entry.element.classList.remove('module-card--dragging');
 
@@ -500,7 +485,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     return registry.some((item) => artboardGroup(item) === group) ? group : null;
   }
 
-  // ── 5. Project Framing and Dynamic Render Updates ──
   function renderProjectFrames(documentState) {
     const focusGroup = activeFocusGroup(documentState);
     const renderedIds = new Set();
@@ -509,7 +493,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     documentState.projects.forEach((project, projectIndex) => {
       const artboardIds = getProjectVisibleArtboardIds(documentState, project.id);
       
-      // Inline toggle anchor
       const anchor = getProjectToggleAnchor(documentState, project.id, projectIndex);
       let frameComp = projectFrames.get(project.id);
       
@@ -529,9 +512,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       frameComp.setCollapsed(project.collapsed);
       frameComp.element.style.left = `${anchor.x}px`;
       frameComp.element.style.top = `${anchor.y}px`;
-      frameComp.element.style.display = 'none'; // Only toggle buttons are displayed inline in the overlay
+      frameComp.element.style.display = 'none';
       
-      // Setup toggles directly on background
       let toggleBtn = world.querySelector(`.project-toggle-${project.id}`);
       if (!toggleBtn) {
         toggleBtn = document.createElement('button');
@@ -551,7 +533,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       toggleBtn.style.top = `${anchor.y}px`;
       renderedProjectIds.add(project.id);
 
-      // Render cards
       artboardIds.forEach((id) => {
         const cardEntry = ensureCardEntry(id);
         if (!cardEntry) return;
@@ -583,7 +564,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       });
     });
 
-    // Cleanup unrendered cards
     cards.forEach((entry, id) => {
       if (!renderedIds.has(id)) {
         entry.resizeObserver?.disconnect();
@@ -592,7 +572,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       }
     });
 
-    // Cleanup unrendered projects
     projectFrames.forEach((frameComp, id) => {
       if (!renderedProjectIds.has(id)) {
         frameComp.element.remove();
@@ -629,7 +608,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     );
   }
 
-  // Centering Transition Easing Logic
   function animateCanvasTo(targetScale, targetX, targetY, duration = 400) {
     const startScale = stage.scaleX();
     const startX = stage.x();
@@ -638,7 +616,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
 
     function tick(now) {
       let t = Math.min((now - startTime) / duration, 1);
-      t = 1 - Math.pow(1 - t, 3); // cubic ease out
+      t = 1 - Math.pow(1 - t, 3);
 
       const s = startScale + (targetScale - startScale) * t;
       const x = startX + (targetX - startX) * t;
@@ -680,7 +658,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const worldW = rect.width / scale;
     const worldH = rect.height / scale;
 
-    // Viewport dimensions accounting for sidebars
     const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
     const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
     const vpW = window.innerWidth - leftWidth - rightWidth;
@@ -730,7 +707,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     if (event.key === 'Escape' && selectedIds.size) clearSelection();
   });
 
-  // ── 6. UI Helpers, Zoom Panel & Hints ──
   function showCopyToast(message) {
     if (!copyToast) {
       copyToast = document.createElement('div');
@@ -745,7 +721,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     }, 1300);
   }
 
-  // Zoom control panel
   zoomUI = document.createElement('div');
   zoomUI.className = 'zoom-controls';
 
@@ -785,19 +760,16 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   zoomUI.appendChild(zoomFit);
   document.body.appendChild(zoomUI);
 
-  // Canvas interaction hints
   const hint = document.createElement('div');
   hint.className = 'canvas-hint';
   hint.textContent = 'Drag grid space to pan · Pinch/ctrl+scroll to zoom · ⊡ to reset';
   document.body.appendChild(hint);
   setTimeout(() => hint.classList.add('hidden'), 5000);
 
-  // Resize handler
   window.addEventListener('resize', () => {
     applyCanvasLayout();
   });
 
-  // ── 7. Render triggers ──
   function render(nextDocument) {
     leftSidebarOpen = nextDocument.ui.leftSidebarOpen !== false;
     leftSidebarWidth = nextDocument.ui.leftSidebarWidth || 220;
@@ -813,7 +785,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     applyCanvasLayout();
   }
 
-  // Initial layout call
   setTimeout(() => {
     applyCanvasLayout();
   }, 0);

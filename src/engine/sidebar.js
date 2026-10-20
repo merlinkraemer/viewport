@@ -106,9 +106,8 @@ export function createSidebar(options) {
   let model = null;
   let activeArtboardId = null;
   let archiveCollapsed = true;
-  const subfolderCollapsed = {}; // Key format: `${projectId}:${subfolderName}` -> boolean
+  const subfolderCollapsed = {};
 
-  // Resizable handle element
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'sidebar-resize';
   resizeHandle.setAttribute('aria-hidden', 'true');
