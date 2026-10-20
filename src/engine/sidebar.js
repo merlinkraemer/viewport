@@ -153,16 +153,31 @@ export function createSidebar(options) {
     return header;
   }
 
-  function createSubfolderHeader(title, collapsed, count, onToggle) {
-    const header = document.createElement('button');
-    header.type = 'button';
+  function createSubfolderHeader(title, collapsed, count, { onToggle, onFocus, focused }) {
+    const header = document.createElement('div');
     header.className = 'sidebar-subfolder-header';
-    header.innerHTML = `
-      <span class="sidebar-subfolder-chevron">${collapsed ? '▸' : '▾'}</span>
-      <span class="sidebar-subfolder-title">${title}</span>
-      <span class="sidebar-subfolder-count">${count}</span>
-    `;
-    header.addEventListener('click', onToggle);
+    header.classList.toggle('sidebar-subfolder-header--focused', focused);
+    header.dataset.group = title;
+
+    const chevron = document.createElement('button');
+    chevron.type = 'button';
+    chevron.className = 'sidebar-subfolder-chevron';
+    chevron.textContent = collapsed ? '▸' : '▾';
+    chevron.title = collapsed ? 'Expand' : 'Collapse';
+    chevron.addEventListener('click', onToggle);
+
+    const titleBtn = document.createElement('button');
+    titleBtn.type = 'button';
+    titleBtn.className = 'sidebar-subfolder-title';
+    titleBtn.textContent = title;
+    titleBtn.title = focused ? 'Show all groups' : `Show only ${title}`;
+    titleBtn.addEventListener('click', onFocus);
+
+    const countEl = document.createElement('span');
+    countEl.className = 'sidebar-subfolder-count';
+    countEl.textContent = String(count);
+
+    header.append(chevron, titleBtn, countEl);
     return header;
   }
 
@@ -309,61 +324,50 @@ export function createSidebar(options) {
       projectWrap.appendChild(list);
 
       const projectArtboards = model.artboardsByProject[project.id] || [];
-      const primitives = projectArtboards.filter((a) => a.layer === 'primitive');
-      const composites = projectArtboards.filter((a) => a.layer !== 'primitive');
 
       if (!project.collapsed) {
-        // Primitives subfolder
-        const primKey = `${project.id}:primitives`;
-        const primCollapsed = subfolderCollapsed[primKey] ?? false;
+        if (model.focusGroup && model.groups.includes(model.focusGroup)) {
+          const showAll = document.createElement('button');
+          showAll.type = 'button';
+          showAll.className = 'sidebar-show-all';
+          showAll.textContent = `Showing ${model.focusGroup} · show all`;
+          showAll.addEventListener('click', () => options.onFocusGroup?.(model.focusGroup));
+          list.appendChild(showAll);
+        }
 
-        const primHeader = createSubfolderHeader('Primitives', primCollapsed, primitives.length, () => {
-          subfolderCollapsed[primKey] = !primCollapsed;
-          render(model);
-        });
-        list.appendChild(primHeader);
+        const groupLists = [];
+        model.groups.forEach((group) => {
+          const artboards = projectArtboards.filter((a) => a.group === group);
+          if (!artboards.length && model.hideEmptyGroups) return;
 
-        const primList = document.createElement('div');
-        primList.className = 'sidebar-subfolder-list';
-        primList.classList.toggle('sidebar-subfolder-list--collapsed', primCollapsed);
+          const key = `${project.id}:${group}`;
+          const collapsed = subfolderCollapsed[key] ?? false;
+          list.appendChild(createSubfolderHeader(group, collapsed, artboards.length, {
+            focused: model.focusGroup === group,
+            onToggle: () => {
+              subfolderCollapsed[key] = !collapsed;
+              render(model);
+            },
+            onFocus: () => options.onFocusGroup?.(group),
+          }));
 
-        primitives.forEach((artboard, index) => {
-          primList.appendChild(createArtboardRow(artboard, index, project));
-        });
-        list.appendChild(primList);
-
-        // Artboards subfolder
-        const artKey = `${project.id}:artboards`;
-        const artCollapsed = subfolderCollapsed[artKey] ?? false;
-
-        const artHeader = createSubfolderHeader('Artboards', artCollapsed, composites.length, () => {
-          subfolderCollapsed[artKey] = !artCollapsed;
-          render(model);
-        });
-        list.appendChild(artHeader);
-
-        const artList = document.createElement('div');
-        artList.className = 'sidebar-subfolder-list';
-        artList.classList.toggle('sidebar-subfolder-list--collapsed', artCollapsed);
-
-        composites.forEach((artboard, index) => {
-          artList.appendChild(createArtboardRow(artboard, index, project));
-        });
-        list.appendChild(artList);
-
-        // Set up separate list drag-reordering
-        const getMergedIds = () => {
-          const primIds = Array.from(primList.querySelectorAll('.sidebar-item--artboard')).map((el) => el.dataset.id);
-          const compIds = Array.from(artList.querySelectorAll('.sidebar-item--artboard')).map((el) => el.dataset.id);
-          return [...primIds, ...compIds];
-        };
-
-        makeListReorderable(primList, () => {
-          options.onReorderProjectArtboards?.(project.id, getMergedIds());
+          const groupList = document.createElement('div');
+          groupList.className = 'sidebar-subfolder-list';
+          groupList.classList.toggle('sidebar-subfolder-list--collapsed', collapsed);
+          artboards.forEach((artboard, index) => {
+            groupList.appendChild(createArtboardRow(artboard, index, project));
+          });
+          list.appendChild(groupList);
+          groupLists.push(groupList);
         });
 
-        makeListReorderable(artList, () => {
-          options.onReorderProjectArtboards?.(project.id, getMergedIds());
+        const getMergedIds = () => groupLists.flatMap((groupList) => (
+          Array.from(groupList.querySelectorAll('.sidebar-item--artboard')).map((el) => el.dataset.id)
+        ));
+        groupLists.forEach((groupList) => {
+          makeListReorderable(groupList, () => {
+            options.onReorderProjectArtboards?.(project.id, getMergedIds());
+          });
         });
       }
 

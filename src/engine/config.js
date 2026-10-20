@@ -34,6 +34,13 @@ export function getDefaultProjectName() {
   return config.defaultProjectName;
 }
 
+export const LAYER_GROUPS = ['Primitives', 'Artboards'];
+
+export function artboardGroup(entry) {
+  if (entry?.group) return entry.group;
+  return entry?.layer === 'primitive' ? LAYER_GROUPS[0] : LAYER_GROUPS[1];
+}
+
 /** Ordered layer keys, for canvas column placement. */
 export function layerOrder() {
   return config.layers.map((l) => l.key);

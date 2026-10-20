@@ -4,7 +4,7 @@ import './pin-sidebar.css';
 import Konva from 'konva';
 import { createArtboard } from './artboard.js';
 import { copyText } from './dom.js';
-import { storageKey } from './config.js';
+import { storageKey, artboardGroup } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
 
@@ -490,8 +490,19 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     });
   }
 
+  function groupOfId(id) {
+    return artboardGroup(registry.find((item) => item.id === id));
+  }
+
+  function activeFocusGroup(documentState) {
+    const group = documentState.ui.focusGroup;
+    if (!group) return null;
+    return registry.some((item) => artboardGroup(item) === group) ? group : null;
+  }
+
   // ── 5. Project Framing and Dynamic Render Updates ──
   function renderProjectFrames(documentState) {
+    const focusGroup = activeFocusGroup(documentState);
     const renderedIds = new Set();
     const renderedProjectIds = new Set();
 
@@ -561,7 +572,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
 
         cardEntry.element.style.left = `${state.position.x}px`;
         cardEntry.element.style.top = `${state.position.y}px`;
-        cardEntry.element.style.display = project.collapsed ? 'none' : '';
+        const hiddenByFocus = focusGroup !== null && groupOfId(id) !== focusGroup;
+        cardEntry.element.style.display = project.collapsed || hiddenByFocus ? 'none' : '';
         
         if (!cardEntry.element.parentNode) {
           world.appendChild(cardEntry.element);
@@ -643,7 +655,24 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   }
 
   function navigateToCanvasNode(targetEl, artboardId = null) {
-    const rect = targetEl.getBoundingClientRect();
+    fitClientRect(targetEl.getBoundingClientRect());
+    if (artboardId) onSelectActiveArtboard?.(artboardId);
+  }
+
+  function fitGroup(group) {
+    const rects = [...cards.values()]
+      .filter((entry) => groupOfId(entry.id) === group && entry.element.style.display !== 'none')
+      .map((entry) => entry.element.getBoundingClientRect());
+    if (!rects.length) return;
+    fitClientRect({
+      left: Math.min(...rects.map((r) => r.left)),
+      top: Math.min(...rects.map((r) => r.top)),
+      width: Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left)),
+      height: Math.max(...rects.map((r) => r.bottom)) - Math.min(...rects.map((r) => r.top)),
+    });
+  }
+
+  function fitClientRect(rect) {
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
     const worldX = (rect.left - worldRect.left) / scale;
@@ -668,7 +697,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const centerY = worldY + worldH / 2;
 
     animateCanvasTo(newScale, vpCenterX - centerX * newScale, vpCenterY - centerY * newScale);
-    if (artboardId) onSelectActiveArtboard?.(artboardId);
   }
 
   function centerOn(id) {
@@ -793,6 +821,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   return {
     render,
     centerOn,
+    fitGroup,
     navigateToCanvasNode,
     showCopyToast,
     copyIds,

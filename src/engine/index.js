@@ -4,7 +4,7 @@
  * between them) is content-agnostic. The host supplies WHAT to show; the
  * engine owns HOW it's shown, persisted, and navigated.
  */
-import { setEngineConfig } from './config.js';
+import { setEngineConfig, artboardGroup, LAYER_GROUPS } from './config.js';
 import { createCanvas } from './canvas.js';
 import { createSidebar } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
@@ -77,6 +77,13 @@ export function createViewport({
     },
     onNavigateArtboard(artboardId) {
       canvas.centerOn(artboardId);
+    },
+    onFocusGroup(group) {
+      const next = documentStore.get().ui.focusGroup === group ? null : group;
+      documentStore.mutate((draft) => {
+        draft.ui.focusGroup = next;
+      });
+      if (next) canvas.fitGroup(next);
     },
     onRenameArtboard(artboardId, newName) {
       documentStore.mutate((draft) => {
@@ -182,6 +189,7 @@ export function createViewport({
 
       const regEntry = activeRegistry.find((r) => r.id === id);
       const layer = regEntry ? regEntry.layer : 'primitive';
+      const group = artboardGroup(regEntry || { layer });
 
       const modelEntry = {
         id,
@@ -192,6 +200,7 @@ export function createViewport({
         noteCount: (documentState.notes || []).filter((n) => n.target?.artboardId === id).length,
         sidebarOrder: artboard.sidebarOrder,
         layer,
+        group,
       };
       if (artboard.archived) archivedArtboards.push(modelEntry);
       else artboardsByProject[artboard.projectId]?.push(modelEntry);
@@ -202,7 +211,11 @@ export function createViewport({
     });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
+    const namedGroups = [...new Set(activeRegistry.map((entry) => entry.group).filter(Boolean))];
     return {
+      groups: [...namedGroups, ...LAYER_GROUPS],
+      hideEmptyGroups: namedGroups.length > 0,
+      focusGroup: documentState.ui.focusGroup,
       projects: documentState.projects,
       activeProjectId: documentState.ui.activeProjectId,
       artboardsByProject,

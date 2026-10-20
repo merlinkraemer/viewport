@@ -13,6 +13,7 @@ const DEFAULT_UI = {
   pinPanelOpen: true,
   pinPanelWidth: 280,
   activeProjectId: DEFAULT_PROJECT_ID,
+  focusGroup: null,
   layoutVersion: 1,
 };
 
@@ -92,6 +93,7 @@ function normalizeUi(ui) {
     pinPanelOpen: ui?.pinPanelOpen !== false,
     pinPanelWidth: Number.isFinite(ui?.pinPanelWidth) ? Math.max(220, Math.min(800, ui.pinPanelWidth)) : DEFAULT_UI.pinPanelWidth,
     activeProjectId: typeof ui?.activeProjectId === 'string' && ui.activeProjectId ? ui.activeProjectId : DEFAULT_PROJECT_ID,
+    focusGroup: typeof ui?.focusGroup === 'string' && ui.focusGroup ? ui.focusGroup : null,
     layoutVersion: Number.isFinite(ui?.layoutVersion) ? ui.layoutVersion : DEFAULT_UI.layoutVersion,
   };
 }

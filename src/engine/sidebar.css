@@ -763,17 +763,13 @@ button.sidebar-section-toggle:hover .sidebar-section-toggle-icon {
   align-items: center;
   gap: var(--ff-space-2);
   width: 100%;
-  background: none;
-  border: none;
   color: var(--ff-muted);
   font-size: var(--ff-type-caption);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: var(--ff-space-2) var(--ff-space-4);
-  cursor: pointer;
   border-radius: var(--ff-radius-sm);
-  font-family: inherit;
   transition: background var(--ff-motion-fast), color var(--ff-motion-fast);
   margin-top: var(--ff-space-2);
 }
@@ -781,6 +777,23 @@ button.sidebar-section-toggle:hover .sidebar-section-toggle-icon {
 .sidebar-subfolder-header:hover {
   background: var(--ff-hover);
   color: var(--ff-text-mid);
+}
+
+.sidebar-subfolder-header--focused {
+  background: var(--ff-select);
+  color: var(--ff-text);
+}
+
+.sidebar-subfolder-chevron,
+.sidebar-subfolder-title {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
 }
 
 .sidebar-subfolder-chevron {
@@ -791,7 +804,29 @@ button.sidebar-section-toggle:hover .sidebar-section-toggle-icon {
 
 .sidebar-subfolder-title {
   flex: 1;
+  min-width: 0;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-show-all {
+  margin: var(--ff-space-2) var(--ff-space-4) 0;
+  padding: var(--ff-space-2) var(--ff-space-4);
+  background: none;
+  border: 1px dashed var(--ff-border-hi);
+  border-radius: var(--ff-radius-sm);
+  color: var(--ff-text-mid);
+  font: inherit;
+  font-size: var(--ff-type-caption);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-show-all:hover {
+  color: var(--ff-text);
+  border-color: var(--ff-border-hover);
 }
 
 .sidebar-subfolder-count {
