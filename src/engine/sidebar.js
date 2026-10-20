@@ -200,7 +200,7 @@ export function createSidebar(options) {
     copyBtn.type = 'button';
     copyBtn.className = 'sidebar-item-action';
     copyBtn.innerHTML = copyIconHtml;
-    copyBtn.title = 'Copy reference';
+    copyBtn.title = 'Copy id (shift-click: with name and file)';
     copyBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       options.onCopyArtboard?.(artboard.id, { extended: event.shiftKey || event.altKey });

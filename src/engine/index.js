@@ -11,6 +11,7 @@ import { createPinSidebar } from './pin-sidebar.js';
 import { loadInitialDocument, createDocumentStore } from './document-store.js';
 import { showTextDialog } from './sidebar-context-menu.js';
 import { getPrimaryArtboardNote, upsertArtboardPrimaryNote } from './notes.js';
+import { copyText } from './dom.js';
 
 export { setEngineConfig };
 
@@ -111,13 +112,21 @@ export function createViewport({
       const state = documentStore.get();
       const artboard = state.artboards[artboardId];
       if (!artboard) return;
+      if (!options.extended) {
+        canvas.copyIds([artboardId]);
+        return;
+      }
       const project = state.projects.find((p) => p.id === artboard.projectId);
-      const displayName = artboard.displayName || artboard.sourceTitle;
-      const text = options.extended
-        ? `Artboard: ${artboardId}\nName: ${displayName}\nProject: ${project?.name || artboard.projectId}`
-        : `${artboardId} - ${displayName}`;
-      navigator.clipboard?.writeText(text).catch(() => {});
-      canvas.showCopyToast(`Copied ${artboardId}`);
+      const file = activeRegistry.find((entry) => entry.id === artboardId)?.file;
+      const lines = [
+        `Artboard: ${artboardId}`,
+        `Name: ${artboard.displayName || artboard.sourceTitle}`,
+        `Project: ${project?.name || artboard.projectId}`,
+        ...(file ? [`File: ${file}`] : []),
+      ];
+      copyText(lines.join('\n'))
+        .then(() => canvas.showCopyToast(`Copied ${artboardId}`))
+        .catch((err) => canvas.showCopyToast(`Copy failed: ${err.message}`));
     },
     onMoveArtboardProject(artboardId, projectId) {
       documentStore.mutate((draft) => {

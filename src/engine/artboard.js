@@ -8,11 +8,7 @@ const pinIconHtml = `
   </svg>
 `;
 
-/**
- * Wraps an artboard's content element in a titled card with a live-dims
- * header and action controls (Pin/Rename).
- */
-export function createArtboard(title, contentEl, { layer = 'primitive' } = {}) {
+export function createArtboard(title, contentEl, { layer = 'primitive', id, file } = {}) {
   const dims = el('span', { class: 'ff-card__dims', text: '' });
   const titleEl = el('span', { class: 'ff-card__title', text: title });
 
@@ -25,6 +21,11 @@ export function createArtboard(title, contentEl, { layer = 'primitive' } = {}) {
   pinBtn.setAttribute('aria-pressed', 'false');
   pinBtn.innerHTML = pinIconHtml;
 
+  const idBtn = el('button', { class: 'ff-card__id', type: 'button', text: id });
+  idBtn.title = file
+    ? `Copy id (${file}). Shift-click to add to the selection.`
+    : 'Copy id. Shift-click to add to the selection.';
+
   const titleRow = el('div', { class: 'ff-card__title-row' }, [
     titleEl,
     renameBtn,
@@ -33,7 +34,7 @@ export function createArtboard(title, contentEl, { layer = 'primitive' } = {}) {
 
   const header = el('div', { class: 'ff-card__header' }, [
     titleRow,
-    dims,
+    el('div', { class: 'ff-card__meta' }, [idBtn, dims]),
   ]);
   const body = el('div', { class: 'ff-card__body' }, [contentEl]);
   const card = el('div', { class: 'ff-card', dataset: { layer } }, [header, body]);
@@ -48,6 +49,7 @@ export function createArtboard(title, contentEl, { layer = 'primitive' } = {}) {
   card.titleEl = titleEl;
   card.renameBtn = renameBtn;
   card.pinBtn = pinBtn;
+  card.idBtn = idBtn;
   card.bodyEl = body;
   return card;
 }

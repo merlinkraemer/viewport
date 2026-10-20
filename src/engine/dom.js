@@ -1,10 +1,3 @@
-/**
- * Tiny DOM helper. el('div', { class: 'x', text: 'hi' }, [childEl]).
- * props: class, text, html, style (object), dataset (object), plus any
- * attribute or event handler (onClick -> 'click'). Returns the element.
- *
- * Engine-local copy so the canvas has no dependency on host content.
- */
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
@@ -23,4 +16,22 @@ export function el(tag, props = {}, children = []) {
     node.append(child.nodeType ? child : document.createTextNode(child));
   }
   return node;
+}
+
+function copyWithTextarea(text) {
+  const area = el('textarea', { style: { position: 'fixed', opacity: '0' } });
+  area.value = text;
+  document.body.appendChild(area);
+  area.select();
+  const copied = document.execCommand('copy');
+  area.remove();
+  if (!copied) throw new Error('Clipboard copy was refused by the browser');
+}
+
+export async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  copyWithTextarea(text);
 }

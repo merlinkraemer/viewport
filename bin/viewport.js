@@ -119,7 +119,7 @@ if (import.meta.hot) {
       if (!mod) return;
       const path = modulePaths[index];
       modules[path] = mod;
-      changedIds.push(artboardId(path));
+      changedIds.push(registryEntry(path, mod).id);
     });
     app.updateRegistry(createRegistry(modules), { changedIds });
   });
@@ -137,22 +137,22 @@ ${configCode}
 let modules = { ...import.meta.glob('${content.artboardGlob}', { eager: true }) };
 const modulePaths = [${hotDeps}];
 
-function artboardId(path) {
-  return path
-    .replace('${content.artboardImportPrefix}', '')
-    .replace(/\\.artboard\\.js$/, '');
+function registryEntry(path, mod) {
+  const file = path.replace('${content.artboardImportPrefix}', '');
+  const folder = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : null;
+  const id = mod.meta?.id ?? file.replace(/\\.artboard\\.js$/, '');
+  return {
+    id,
+    file,
+    group: mod.meta?.group ?? folder,
+    sourceTitle: mod.meta?.title ?? id,
+    layer: mod.meta?.layer ?? 'primitive',
+    render: mod.default,
+  };
 }
 
 function createRegistry(sourceModules) {
-  return Object.entries(sourceModules).map(([path, mod]) => {
-    const id = artboardId(path);
-    return {
-      id,
-      sourceTitle: mod.meta?.title ?? id,
-      layer: mod.meta?.layer ?? 'primitive',
-      render: mod.default,
-    };
-  });
+  return Object.entries(sourceModules).map(([path, mod]) => registryEntry(path, mod));
 }
 
 const app = createViewport({

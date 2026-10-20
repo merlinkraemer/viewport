@@ -3,6 +3,7 @@ import './sidebar.css';
 import './pin-sidebar.css';
 import Konva from 'konva';
 import { createArtboard } from './artboard.js';
+import { copyText } from './dom.js';
 import { storageKey } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
@@ -51,6 +52,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   const cards = new Map(); // id -> { id, element, pinBtn, renameBtn, label }
   const projectFrames = new Map(); // projectId -> ProjectFrame components
   let copyToast = null;
+  const selectedIds = new Set();
 
   let leftSidebarWidth = 220;
   let pinSidebarWidth = pinSidebar.getWidth();
@@ -282,7 +284,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     if (!reg) return null;
 
     const title = reg.sourceTitle || reg.id;
-    const el = createArtboard(title, reg.render(), { layer: reg.layer });
+    const el = createArtboard(title, reg.render(), { layer: reg.layer, id, file: reg.file });
     el.classList.add('module-card--positioned');
     el.dataset.artboardId = id;
 
@@ -387,6 +389,19 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const entry = cards.get(id);
     if (!entry || entry.dragBound) return;
     entry.dragBound = true;
+
+    entry.element.idBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+      } else {
+        selectedIds.clear();
+        selectedIds.add(id);
+      }
+      applySelection();
+      copyIds([...selectedIds]);
+    });
 
     // Pin Toggle
     entry.pinBtn.addEventListener('click', (event) => {
@@ -662,6 +677,31 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     navigateToCanvasNode(entry.element, id);
   }
 
+  function applySelection() {
+    cards.forEach((entry, id) => {
+      entry.element.classList.toggle('ff-card--selected', selectedIds.has(id));
+    });
+  }
+
+  function clearSelection() {
+    selectedIds.clear();
+    applySelection();
+  }
+
+  function copyIds(ids) {
+    if (!ids.length) {
+      showCopyToast('Selection cleared');
+      return;
+    }
+    copyText(ids.join('\n'))
+      .then(() => showCopyToast(ids.length === 1 ? `Copied ${ids[0]}` : `Copied ${ids.length} ids`))
+      .catch((err) => showCopyToast(`Copy failed: ${err.message}`));
+  }
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && selectedIds.size) clearSelection();
+  });
+
   // ── 6. UI Helpers, Zoom Panel & Hints ──
   function showCopyToast(message) {
     if (!copyToast) {
@@ -755,6 +795,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     centerOn,
     navigateToCanvasNode,
     showCopyToast,
+    copyIds,
     refreshArtboard,
     refreshArtboards(ids) {
       ids.forEach(refreshArtboard);
