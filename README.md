@@ -63,7 +63,7 @@ Every artboard exports `meta` and a default `render()` that returns one DOM elem
 
 ## Feedback by id
 
-Every card shows its id under the title. Click it to copy; shift-click several cards to copy a list (Esc clears the selection). The user pastes ids into the chat, and the agent finds the file from the id:
+Every card shows its id under the title. Click the title or the id to copy it; shift-click several cards to copy a list (Esc clears the selection). Dragging the title still moves the card. The user pastes ids into the chat, and the agent finds the file from the id:
 
 ```txt
 checkout/option-b  →  viewport/artboards/checkout/option-b.artboard.js

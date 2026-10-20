@@ -28,6 +28,7 @@
 }
 
 .ff-card__title {
+  cursor: copy;
   font-size: var(--ff-type-label);
   font-family: var(--ff-font-mono);
   letter-spacing: 0.06em;

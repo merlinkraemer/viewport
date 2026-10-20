@@ -40,7 +40,7 @@ export default function render() {
 
 ## Ids and feedback
 
-Every card shows its id; a click copies it, shift-click copies several. The id is the file path under `viewport/artboards/` without `.artboard.js`:
+Every card shows its id; clicking the card title or the id copies it, shift-click copies several. The id is the file path under `viewport/artboards/` without `.artboard.js`:
 
 `checkout/option-b` → `viewport/artboards/checkout/option-b.artboard.js`
 

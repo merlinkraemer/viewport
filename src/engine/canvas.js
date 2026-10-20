@@ -12,6 +12,7 @@ const SCALE_BY = 1.05;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
 const SNAP = 8;
+const CLICK_TRAVEL_PX = 4;
 
 const ARTBOARD_BASE_X = 48;
 const ARTBOARD_BASE_Y = 56;
@@ -380,8 +381,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     if (!entry || entry.dragBound) return;
     entry.dragBound = true;
 
-    entry.element.idBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
+    const selectAndCopy = (event) => {
       if (event.shiftKey || event.metaKey || event.ctrlKey) {
         if (selectedIds.has(id)) selectedIds.delete(id);
         else selectedIds.add(id);
@@ -391,6 +391,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       }
       applySelection();
       copyIds([...selectedIds]);
+    };
+
+    entry.element.idBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      selectAndCopy(event);
     });
 
     entry.pinBtn.addEventListener('click', (event) => {
@@ -430,6 +435,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       const artboard = currentDoc.artboards[id];
       if (!artboard || artboard.archived) return;
 
+      const startClient = { x: event.clientX, y: event.clientY };
+      const pressedTitle = event.target.closest('.ff-card__title');
       const startPointer = clientToWorld(event.clientX, event.clientY);
       const startPosition = { ...artboard.position };
 
@@ -456,6 +463,14 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
 
         stage.draggable(true);
         entry.element.classList.remove('module-card--dragging');
+
+        const travel = Math.hypot(upEvent.clientX - startClient.x, upEvent.clientY - startClient.y);
+        if (pressedTitle && travel < CLICK_TRAVEL_PX) {
+          entry.element.style.left = `${startPosition.x}px`;
+          entry.element.style.top = `${startPosition.y}px`;
+          selectAndCopy(upEvent);
+          return;
+        }
 
         const pointer = clientToWorld(upEvent.clientX, upEvent.clientY);
         const dx = pointer.x - startPointer.x;

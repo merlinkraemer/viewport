@@ -11,6 +11,7 @@ const pinIconHtml = `
 export function createArtboard(title, contentEl, { layer = 'primitive', id, file } = {}) {
   const dims = el('span', { class: 'ff-card__dims', text: '' });
   const titleEl = el('span', { class: 'ff-card__title', text: title });
+  titleEl.title = 'Click to copy id. Shift-click to add to the selection.';
 
   const renameBtn = el('button', { class: 'ff-card__rename', text: '✎', type: 'button' });
   renameBtn.setAttribute('aria-label', `Rename "${title}"`);
