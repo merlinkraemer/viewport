@@ -391,17 +391,19 @@ function runInit() {
   const cwd = process.cwd();
   const viewportDir = path.join(cwd, 'viewport');
   const configPath = path.join(cwd, 'viewport.config.js');
-  if (exists(viewportDir)) throw new Error(`Refusing to overwrite existing ${viewportDir}`);
-  if (exists(configPath)) throw new Error(`Refusing to overwrite existing ${configPath}`);
+  const skillPath = path.join(cwd, '.claude', 'skills', 'viewport', 'SKILL.md');
+  for (const target of [viewportDir, configPath, skillPath]) {
+    if (exists(target)) throw new Error(`Refusing to overwrite existing ${target}`);
+  }
 
   copyDir(path.join(packageRoot, 'templates', 'viewport'), viewportDir);
   fs.copyFileSync(path.join(packageRoot, 'templates', 'viewport.config.js'), configPath);
+  fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+  fs.copyFileSync(path.join(packageRoot, 'templates', 'skills', 'viewport', 'SKILL.md'), skillPath);
   updatePackageJson(cwd);
   ignoreReviewBuild(cwd);
-  console.log(`Created viewport/ scaffold, package.json script "viewport" and .gitignore entry viewport/dist/.
-
-Agent skill: viewport/SKILL.md. For Claude Code, copy it into the project skills:
-  mkdir -p .claude/skills/viewport && cp viewport/SKILL.md .claude/skills/viewport/SKILL.md
+  console.log(`Created viewport/ scaffold, viewport.config.js, agent skill .claude/skills/viewport/SKILL.md,
+package.json script "viewport" and .gitignore entry viewport/dist/.
 
 Next: npx viewport`);
 }

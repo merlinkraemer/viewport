@@ -24,17 +24,11 @@ npx viewport init
 npx viewport
 ```
 
-`init` creates `viewport/`, `viewport.config.js`, a `viewport` script in `package.json`, and a `viewport/dist/` line in `.gitignore`. It refuses to overwrite an existing `viewport/`.
+`init` creates `viewport/`, `viewport.config.js`, the agent skill at `.claude/skills/viewport/SKILL.md`, a `viewport` script in `package.json`, and a `viewport/dist/` line in `.gitignore`. It stops without changes if `viewport/`, `viewport.config.js` or the skill file already exists.
 
 ## Agent skill
 
-`init` puts the authoring skill at `viewport/SKILL.md`. Agents that read project files can be pointed at it directly. For Claude Code, copy it into the project skills:
-
-```bash
-mkdir -p .claude/skills/viewport && cp viewport/SKILL.md .claude/skills/viewport/SKILL.md
-```
-
-The skill covers the artboard shape, ids, design rounds (current state + 3 options, a Decisions artboard, only the current round on the canvas), locked pieces in `design-system/`, and how to verify a build.
+`init` installs the authoring skill at `.claude/skills/viewport/SKILL.md`, where Claude Code picks it up with no extra step. Other agents can be pointed at the same file. It covers the artboard shape, ids, design rounds (current state + 3 options, a Decisions artboard, only the current round on the canvas), locked pieces in `design-system/`, and how to verify a build.
 
 ## Project structure
 
@@ -42,8 +36,8 @@ The skill covers the artboard shape, ids, design rounds (current state + 3 optio
 viewport/
   artboards/        *.artboard.js, folders allowed
   design-system/    tokens, primitives, modules, composites
-  SKILL.md
 viewport.config.js
+.claude/skills/viewport/SKILL.md
 ```
 
 ## Artboard
