@@ -27,6 +27,8 @@ function debounce(fn, ms) {
   };
 }
 
+const FIRST_MEASURE_SETTLE_MS = 150;
+
 function readStoredCamera() {
   try {
     const raw = localStorage.getItem(storageKey('camera'));
@@ -54,6 +56,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   const projectFrames = new Map();
   let copyToast = null;
   const selectedIds = new Set();
+  const resolveAfterFirstMeasure = debounce(() => documentStore.resolveOverlaps(), FIRST_MEASURE_SETTLE_MS);
 
   let leftSidebarWidth = 220;
   let pinSidebarWidth = pinSidebar.getWidth();
@@ -291,11 +294,13 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
           if (artboard) {
             const currentSize = artboard.size;
             if (!currentSize || currentSize.width !== cardW || currentSize.height !== cardH) {
+              const isFirstMeasure = !currentSize;
               documentStore.mutate((draft) => {
                 if (draft.artboards[id]) {
                   draft.artboards[id].size = { width: cardW, height: cardH };
                 }
               }, { persist: true });
+              if (isFirstMeasure) resolveAfterFirstMeasure();
             }
           }
         }, 100);
