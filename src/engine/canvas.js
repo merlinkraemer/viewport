@@ -276,7 +276,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }, { passive: false });
 
   window.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) e.preventDefault();
+    if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault();
   }, { passive: false });
 
   let gestureStartScale = null;
