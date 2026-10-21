@@ -1,4 +1,4 @@
-import { setEngineConfig, artboardGroup, LAYER_GROUPS } from './config.js';
+import { setEngineConfig, artboardGroup, LAYER_GROUPS, listPages, pageId } from './config.js';
 import { createCanvas } from './canvas.js';
 import { createSidebar } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
@@ -12,7 +12,7 @@ export { setEngineConfig };
 /**
  * @param {object}  opts
  * @param {Element} opts.mount             container for the canvas viewport
- * @param {Array}   opts.registry          [{ id, sourceTitle, layer, render, file?, group? }]
+ * @param {Array}   opts.registry          [{ id, sourceTitle, layer, render, file?, group?, page? }]
  * @param {Array}   [opts.layers]          taxonomy [{ key, label }]
  * @param {string}  [opts.storageNamespace]
  * @param {string}  [opts.defaultProjectName]
@@ -37,8 +37,50 @@ export function createViewport({
     ...(defaultProjectName ? { defaultProjectName } : {}),
   });
 
+  let pages = listPages(activeRegistry);
+  const baseTitle = document.title;
+
+  function pageFromHash() {
+    const slug = decodeURIComponent(window.location.hash.slice(1)).split('/')[0];
+    return pages.some((page) => page.id === slug) ? slug : null;
+  }
+
+  function resolvePage(preferred) {
+    if (pages.length < 2) return null;
+    if (pages.some((page) => page.id === preferred)) return preferred;
+    return pages[0].id;
+  }
+
+  function reflectPage(page) {
+    const label = pages.find((entry) => entry.id === page)?.label;
+    document.title = label ? `${label} · ${baseTitle}` : baseTitle;
+    const hash = page ? `#${page}` : '';
+    if (window.location.hash !== hash) {
+      const url = new URL(window.location.href);
+      url.hash = hash;
+      window.history.replaceState(null, '', url);
+    }
+  }
+
   const bootstrapDoc = loadInitialDocument(activeRegistry);
+  bootstrapDoc.ui.activePage = resolvePage(pageFromHash() ?? bootstrapDoc.ui.activePage);
+  reflectPage(bootstrapDoc.ui.activePage);
   const documentStore = createDocumentStore(bootstrapDoc);
+
+  function selectPage(page) {
+    const next = resolvePage(page);
+    reflectPage(next);
+    if (documentStore.get().ui.activePage === next) return;
+    documentStore.mutate((draft) => {
+      draft.ui.activePage = next;
+      draft.ui.focusGroup = null;
+    });
+  }
+
+  window.addEventListener('hashchange', () => {
+    const page = pageFromHash();
+    if (page) selectPage(page);
+  });
 
   const pinSidebar = createPinSidebar({
     onLayoutChange(width, pinned, meta) {
@@ -57,6 +99,7 @@ export function createViewport({
 
   const sidebar = createSidebar({
     build,
+    onSelectPage: selectPage,
     onSelectActiveProject(projectId) {
       documentStore.mutate((draft) => {
         draft.ui.activeProjectId = projectId;
@@ -176,8 +219,10 @@ export function createViewport({
     });
 
     const archivedArtboards = [];
+    const activePage = documentState.ui.activePage;
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
       if (artboard.orphaned) return;
+      if (activePage && artboard.page !== activePage) return;
 
       const regEntry = activeRegistry.find((r) => r.id === id);
       const layer = regEntry ? regEntry.layer : 'primitive';
@@ -203,8 +248,11 @@ export function createViewport({
     });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
-    const namedGroups = [...new Set(activeRegistry.map((entry) => entry.group).filter(Boolean))];
+    const pageRegistry = activePage ? activeRegistry.filter((entry) => pageId(entry) === activePage) : activeRegistry;
+    const namedGroups = [...new Set(pageRegistry.map((entry) => entry.group).filter(Boolean))];
     return {
+      pages,
+      activePage,
       groups: [...namedGroups, ...LAYER_GROUPS],
       hideEmptyGroups: namedGroups.length > 0,
       focusGroup: documentState.ui.focusGroup,
@@ -231,7 +279,10 @@ export function createViewport({
     if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');
     const idsToRefresh = changedIds || nextRegistry.map((entry) => entry.id);
     activeRegistry.splice(0, activeRegistry.length, ...nextRegistry);
+    pages = listPages(activeRegistry);
     documentStore.syncRegistry(activeRegistry);
+    const page = documentStore.get().ui.activePage;
+    if (resolvePage(page) !== page) selectPage(page);
     canvas.refreshArtboards(idsToRefresh);
   }
 

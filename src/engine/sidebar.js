@@ -106,6 +106,7 @@ export function createSidebar(options) {
   let model = null;
   let activeArtboardId = null;
   let archiveCollapsed = true;
+  let pagesCollapsed = false;
   const subfolderCollapsed = {};
 
   const resizeHandle = document.createElement('div');
@@ -393,6 +394,42 @@ export function createSidebar(options) {
     return section;
   }
 
+  function buildPagesSection() {
+    const section = document.createElement('section');
+    section.className = 'sidebar-section sidebar-section--pages';
+    section.appendChild(createSectionHeaderButton('Pages', pagesCollapsed, () => {
+      pagesCollapsed = !pagesCollapsed;
+      render(model);
+    }, String(model.pages.length)));
+
+    const list = document.createElement('nav');
+    list.className = 'sidebar-page-list';
+    list.classList.toggle('sidebar-page-list--collapsed', pagesCollapsed);
+    model.pages.forEach((page) => {
+      const item = document.createElement('a');
+      item.className = 'sidebar-item sidebar-item--page';
+      item.classList.toggle('sidebar-item--page-active', page.id === model.activePage);
+      item.href = `#${page.id}`;
+      item.dataset.page = page.id;
+      item.title = page.label;
+      const label = document.createElement('span');
+      label.className = 'sidebar-page-label';
+      label.textContent = page.label;
+      const count = document.createElement('span');
+      count.className = 'sidebar-page-count';
+      count.textContent = String(page.count);
+      item.append(label, count);
+      item.addEventListener('click', (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+        event.preventDefault();
+        options.onSelectPage?.(page.id);
+      });
+      list.appendChild(item);
+    });
+    section.appendChild(list);
+    return section;
+  }
+
   function buildArchiveSection() {
     const section = document.createElement('section');
     section.className = 'sidebar-section sidebar-section--archive';
@@ -441,6 +478,7 @@ export function createSidebar(options) {
     scroll.innerHTML = '';
     stickyBottom.innerHTML = '';
 
+    if (model.pages.length > 1) scroll.appendChild(buildPagesSection());
     scroll.appendChild(buildProjectsSection());
     stickyBottom.appendChild(buildArchiveSection());
     setActiveStyles();

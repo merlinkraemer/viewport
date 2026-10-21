@@ -5,7 +5,7 @@ description: Design and review UI mockups as live code on the Viewport canvas (t
 
 # Viewport
 
-Viewport renders every `viewport/artboards/**/*.artboard.js` as a card on an infinite canvas. The user judges mockups there, sees them grouped in the sidebar, and gives feedback by copying a card's id. This is guidance, not a framework: bend it to the project.
+Viewport renders `viewport/artboards/**/*.artboard.js` as cards on an infinite canvas, one page at a time. The user judges mockups there, switches pages and groups in the sidebar, and gives feedback by copying a card's id. This is guidance, not a framework: bend it to the project.
 
 - `npx viewport`: dev server with HMR, for you while you work.
 - `npx viewport build`: static review build in `viewport/dist/` with `build.json`.
@@ -15,7 +15,7 @@ Viewport renders every `viewport/artboards/**/*.artboard.js` as a card on an inf
 
 ```txt
 viewport/
-  artboards/          one file per card; folders become sidebar groups
+  artboards/          one file per card; top-level folders are pages, subfolders are groups
   design-system/      tokens.css, primitives, modules, composites; index.js exports el()
 viewport.config.js    layers, storage namespace
 ```
@@ -34,7 +34,8 @@ export default function render() {
 
 - `render()` returns one DOM element.
 - `meta.layer` is one of the configured layers (`primitive`, `module`, `composite` by default).
-- `meta.group` puts the card in a sidebar group. Without it, the folder under `artboards/` is the group. Use groups to separate what the user should look at now from everything else; the user clicks a group name to see only that group.
+- **One page per focus area.** Each top-level folder under `artboards/` is a page (`artboards/checkout/…` is the page `checkout`); `meta.page` overrides it. Only the selected page is mounted, so pages keep a big project fast; never put every area on one page. Link the user to a page with its hash: `http://<host>:<port>/#checkout`.
+- `meta.group` puts the card in a sidebar group inside its page. Without it, the folder under `artboards/` is the group. Use groups to separate what the user should look at now from everything else; the user clicks a group name to see only that group.
 - `meta.id` overrides the id. Avoid it unless a file must move without breaking its id.
 - `#design-system/...` resolves to `viewport/design-system/` from any folder depth.
 
@@ -55,7 +56,7 @@ Build bottom up: primitive (Button) → module (Toolbar) → composite (EditorSh
 1. **Research first.** Before designing, look at how established products solve the same problem and say what you borrow. If a direction is not working, change the approach; do not keep iterating on it.
 2. **One area per round.** Show the current state plus 3 distinct options (different ideas, not three tweaks of one). The user picks, then the next round starts.
 3. **A Decisions artboard per round.** It lists each open question, your recommendation with a one-line reason, and the option ids (`checkout/option-a` …).
-4. **Only the current round on the canvas.** When a round is decided, delete its option files from `viewport/` (git keeps them). No archive folders.
+4. **Only the current round on each page.** The round lives on its area's page. When a round is decided, delete its option files from `viewport/` (git keeps them), and keep only the current state and locked pieces on that page. No archive folders.
 5. **Judge in context.** Show options inside the real surrounding layout (the actual screen with its neighbours), not on isolated sheets. Example: a mixer channel option shown inside the full mixer, not alone.
 6. **Low-fi first.** For workflow and layout questions use grey boxes and labels. Add visual detail once the direction is set.
 7. **Record picks** in a project doc (for example `docs/ui-picks.md`): date, question, picked id, why.
