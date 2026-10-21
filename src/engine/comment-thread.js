@@ -31,6 +31,14 @@ function submitOnModEnter(textarea, submit) {
   });
 }
 
+function submitOnEnter(textarea, submit) {
+  textarea.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    submit();
+  });
+}
+
 export function createCommentThread(store, { onClose } = {}) {
   let panel = null;
   let titleEl = null;
@@ -191,16 +199,18 @@ export function createCommentThread(store, { onClose } = {}) {
 
     composer = document.createElement('textarea');
     composer.className = 'comment-input';
-    composer.placeholder = 'Add a comment… (⌘/Ctrl+Enter)';
+    composer.placeholder = 'Add a comment… (Enter)';
     const add = () => {
       const text = composer.value.trim();
       if (!text) return;
       run(async () => {
         await store.add(artboardId, text);
         composer.value = '';
+        composer.blur();
+        close();
       });
     };
-    submitOnModEnter(composer, add);
+    submitOnEnter(composer, add);
     addBtn = button('comment-action comment-action--primary', 'Comment', add);
 
     const footer = document.createElement('div');
