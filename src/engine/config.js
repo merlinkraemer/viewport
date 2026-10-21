@@ -51,7 +51,8 @@ export function groupLabel(group, page) {
 
 export function shortTitle(title, { page, group } = {}) {
   const redundant = new Set([page, slug(group), group ? slug(groupLabel(group, page)) : null].filter(Boolean));
-  return stripLeadingSegments(title, redundant);
+  const short = stripLeadingSegments(title, redundant);
+  return short === title ? short : short.charAt(0).toUpperCase() + short.slice(1);
 }
 
 function leadingNumber(label) {
