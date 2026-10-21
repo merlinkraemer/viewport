@@ -1,4 +1,5 @@
 import './comments.css';
+import { storageKey } from './config.js';
 
 const PANEL_WIDTH = 300;
 const EDGE = 8;
@@ -39,6 +40,23 @@ function submitOnEnter(textarea, submit) {
   });
 }
 
+function loadDrafts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey('comment-drafts')) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistDrafts(drafts) {
+  try {
+    localStorage.setItem(storageKey('comment-drafts'), JSON.stringify(drafts));
+  } catch {
+    return;
+  }
+}
+
 export function createCommentThread(store, { onClose } = {}) {
   let panel = null;
   let titleEl = null;
@@ -50,6 +68,13 @@ export function createCommentThread(store, { onClose } = {}) {
   let anchor = null;
   let editing = null;
   let errorText = '';
+  const drafts = loadDrafts();
+
+  function setDraft(id, text) {
+    if (text) drafts[id] = text;
+    else delete drafts[id];
+    persistDrafts(drafts);
+  }
 
   async function run(task) {
     errorText = '';
@@ -200,12 +225,15 @@ export function createCommentThread(store, { onClose } = {}) {
     composer = document.createElement('textarea');
     composer.className = 'comment-input';
     composer.placeholder = 'Add a comment… (Enter)';
+    composer.value = drafts[artboardId] || '';
+    composer.addEventListener('input', () => setDraft(artboardId, composer.value));
     const add = () => {
       const text = composer.value.trim();
       if (!text) return;
       run(async () => {
         await store.add(artboardId, text);
         composer.value = '';
+        setDraft(artboardId, '');
         composer.blur();
         close();
       });
