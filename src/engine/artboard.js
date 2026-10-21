@@ -8,6 +8,12 @@ const pinIconHtml = `
   </svg>
 `;
 
+const commentIconHtml = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+`;
+
 export function createArtboard(title, contentEl, { layer = 'primitive', id, file } = {}) {
   const dims = el('span', { class: 'ff-card__dims', text: '' });
   const titleEl = el('span', { class: 'ff-card__title', text: title });
@@ -27,6 +33,12 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
     ? `Click to copy id (${file}). Shift-click to add to the selection.`
     : 'Click to copy id. Shift-click to add to the selection.';
 
+  const commentBtn = el('button', { class: 'ff-card__comments', type: 'button' });
+  commentBtn.innerHTML = commentIconHtml;
+  const commentCount = el('span', { class: 'ff-card__comments-count', text: '' });
+  commentBtn.appendChild(commentCount);
+  commentBtn.title = 'Comments';
+
   const titleRow = el('div', { class: 'ff-card__title-row' }, [
     titleEl,
     renameBtn,
@@ -35,7 +47,7 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
 
   const header = el('div', { class: 'ff-card__header' }, [
     titleRow,
-    el('div', { class: 'ff-card__meta' }, [idBtn, dims]),
+    el('div', { class: 'ff-card__meta' }, [commentBtn, idBtn, dims]),
   ]);
   const body = el('div', { class: 'ff-card__body' }, [contentEl]);
   const card = el('div', { class: 'ff-card', dataset: { layer } }, [header, body]);
@@ -51,6 +63,13 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
   card.renameBtn = renameBtn;
   card.pinBtn = pinBtn;
   card.idBtn = idBtn;
+  card.commentBtn = commentBtn;
+  card.setCommentCount = (open, total) => {
+    commentCount.textContent = open ? String(open) : '';
+    commentBtn.classList.toggle('ff-card__comments--open', open > 0);
+    commentBtn.classList.toggle('ff-card__comments--any', total > 0);
+    commentBtn.title = total ? `Comments: ${open} open of ${total}` : 'Add a comment';
+  };
   card.bodyEl = body;
   return card;
 }

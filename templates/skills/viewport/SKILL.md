@@ -47,6 +47,14 @@ Every card shows its id; clicking the card title or the id copies it, shift-clic
 
 If no file matches, the id came from `meta.id`: `grep -rn "id: 'checkout-b'" viewport/artboards`. Feedback such as "checkout/option-b: tighter rows" refers to exactly that file. Name files so ids read well (`option-a`, not `v3-final`).
 
+## Comments
+
+The user comments on cards in the canvas; the comments land in `viewport/comments.json`, keyed by artboard id: `{ id, text, at, resolved }`. Read it at the start of each iteration.
+
+- Open comments (`resolved: false`) are feedback on that card's file (the id maps to the file as above).
+- After acting on one, set `resolved: true`. To answer, append `{ "id": "<unique>", "text": "...", "at": "<ISO time>", "resolved": false, "by": "agent" }` to the same list, for example when you need a decision or want to say what changed.
+- Edit the file as JSON and keep it valid; the servers refuse to write over a broken file. Never delete the user's comments.
+
 ## Layers
 
 Build bottom up: primitive (Button) → module (Toolbar) → composite (EditorShell). Modules and composites import and call primitives; they never re-create their markup. Change a primitive and every card using it updates.

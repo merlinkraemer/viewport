@@ -73,6 +73,23 @@ checkout/option-b  →  viewport/artboards/checkout/option-b.artboard.js
 
 An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards`. The copy button in the sidebar copies the same id; shift-click there adds name and file.
 
+## Comments
+
+Each card header has a comment button with a count of open comments. It opens a small thread: add a comment (⌘/Ctrl+Enter), edit one, resolve or reopen it. The sidebar's comment button opens the same thread.
+
+Comments live in `viewport/comments.json`, a file the agent reads and edits, keyed by artboard id:
+
+```json
+{
+  "checkout/option-b": [
+    { "id": "c-mvho97zf-64c076", "text": "Tighter rows", "at": "2026-10-21T05:28:48.555Z", "resolved": false },
+    { "id": "c-mvhoa1b2-a1b2c3", "text": "Done: rows at 8px", "at": "2026-10-21T06:02:10.000Z", "resolved": false, "by": "agent" }
+  ]
+}
+```
+
+Both `npx viewport` and `npx viewport preview` serve `GET`/`POST`/`PATCH` on `__viewport/comments`, so a review build on a phone saves comments too. Each write rereads the file, so edits an agent made in between survive, and replaces it atomically. A file with broken JSON is never overwritten; the server answers 409 until it is fixed. Another static server shows comments read-only. In dev, an agent's edit to the file shows up live. Comments are not part of the build hash. Notes from older versions, kept in the browser, move into the file on the first load with a server.
+
 ## Pages
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".

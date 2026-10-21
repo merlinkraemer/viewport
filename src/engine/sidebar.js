@@ -249,11 +249,11 @@ export function createSidebar(options) {
     noteBtn.type = 'button';
     noteBtn.className = 'sidebar-item-action';
     noteBtn.innerHTML = noteIconHtml;
-    noteBtn.classList.toggle('sidebar-item-action--active', artboard.noteCount > 0);
-    noteBtn.title = artboard.noteCount > 0 ? 'Edit note' : 'Add note';
+    noteBtn.classList.toggle('sidebar-item-action--active', artboard.commentCount > 0);
+    noteBtn.title = artboard.commentCount > 0 ? `Comments (${artboard.commentCount} open)` : 'Comments';
     noteBtn.addEventListener('click', (event) => {
       event.stopPropagation();
-      options.onEditArtboardNote?.(artboard.id);
+      options.onOpenComments?.(artboard.id);
     });
     actions.appendChild(noteBtn);
 
@@ -283,8 +283,8 @@ export function createSidebar(options) {
           onSelect: () => options.onTogglePin?.(artboard.id),
         },
         {
-          label: artboard.noteCount > 0 ? 'Edit note...' : 'Add note...',
-          onSelect: () => options.onEditArtboardNote?.(artboard.id),
+          label: 'Comments...',
+          onSelect: () => options.onOpenComments?.(artboard.id),
         },
         {
           label: 'Move to project...',

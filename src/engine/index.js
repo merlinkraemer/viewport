@@ -3,8 +3,8 @@ import { createCanvas } from './canvas.js';
 import { createSidebar, pageNodeKey } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
 import { loadInitialDocument, createDocumentStore } from './document-store.js';
-import { showTextDialog } from './sidebar-context-menu.js';
-import { getPrimaryArtboardNote, upsertArtboardPrimaryNote } from './notes.js';
+import { createCommentsStore } from './comments.js';
+import { createCommentThread } from './comment-thread.js';
 import { copyText } from './dom.js';
 
 export { setEngineConfig };
@@ -106,12 +106,29 @@ export function createViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
+  const comments = createCommentsStore({
+    onChange() {
+      canvas.refreshComments();
+      commentThread.refresh();
+      sidebar.render(buildSidebarModel(documentStore.get()));
+    },
+  });
+  const commentThread = createCommentThread(comments);
+
+  function openComments(artboardId, anchor) {
+    const button = anchor || mount.querySelector(`[data-artboard-id="${CSS.escape(artboardId)}"] .ff-card__comments`);
+    if (button) commentThread.open(artboardId, button);
+  }
+
   const canvas = createCanvas({
     viewport: mount,
     documentStore,
     pinSidebar,
     registry: activeRegistry,
+    comments,
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
+    onOpenComments: openComments,
+    onCameraChange: () => commentThread.reposition(),
   });
 
   const sidebar = createSidebar({
@@ -207,20 +224,10 @@ export function createViewport({
         }
       });
     },
-    onEditArtboardNote(artboardId) {
-      const state = documentStore.get();
-      const note = getPrimaryArtboardNote(state, artboardId);
-      showTextDialog({
-        title: `Note: ${artboardId}`,
-        initialValue: note?.text || '',
-        placeholder: 'Add a note for this artboard...',
-        confirmLabel: 'Save',
-        onSubmit: (value) => {
-          documentStore.mutate((draft) => {
-            upsertArtboardPrimaryNote(draft, artboardId, value);
-          });
-        },
-      });
+    onOpenComments(artboardId) {
+      selectPageOf(artboardId);
+      canvas.centerOn(artboardId);
+      openComments(artboardId);
     },
     onReorderProjectArtboards(projectId, orderedIds) {
       documentStore.mutate((draft) => {
@@ -246,12 +253,6 @@ export function createViewport({
     });
 
     const registryById = new Map(activeRegistry.map((entry) => [entry.id, entry]));
-    const noteCounts = new Map();
-    (documentState.notes || []).forEach((note) => {
-      const id = note.target?.artboardId;
-      if (id) noteCounts.set(id, (noteCounts.get(id) || 0) + 1);
-    });
-
     const archivedArtboards = [];
     const activePage = documentState.ui.activePage;
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
@@ -266,7 +267,7 @@ export function createViewport({
         displayName: artboard.displayName,
         projectId: artboard.projectId,
         pinned: artboard.pinned && !artboard.archived,
-        noteCount: noteCounts.get(id) || 0,
+        commentCount: comments.openCount(id),
         sidebarOrder: artboard.sidebarOrder,
         layer,
         page: artboard.page,
@@ -305,6 +306,19 @@ export function createViewport({
   sidebar.render(buildSidebarModel(initialState));
 
   setTimeout(() => documentStore.relayout(activeRegistry), 200);
+
+  async function migrateLocalNotes() {
+    const notes = (documentStore.get().notes || []).filter((note) => note.text?.trim());
+    if (!notes.length || !comments.isAvailable()) return;
+    for (const note of notes) await comments.add(note.target.artboardId, note.text);
+    documentStore.mutate((draft) => {
+      draft.notes = [];
+    });
+  }
+
+  comments.load()
+    .then(migrateLocalNotes)
+    .catch((err) => console.error('Failed to move local notes into comments.json', err));
 
   function updateRegistry(nextRegistry, { changedIds } = {}) {
     if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');

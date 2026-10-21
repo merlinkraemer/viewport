@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, createServer, normalizePath, preview } from 'vite';
+import { createCommentsMiddleware } from './comments-api.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY_URL = '/@viewport/entry.js';
@@ -215,6 +216,10 @@ function viewportVitePlugin(content, { buildInfo = null, htmlEntry = null } = {}
     },
     configureServer(server) {
       server.watcher.add(content.viewportDir);
+      server.middlewares.use(createCommentsMiddleware(commentsPath(content)));
+      server.watcher.on('change', (filePath) => {
+        if (path.resolve(filePath) === commentsPath(content)) server.ws.send({ type: 'custom', event: 'viewport:comments' });
+      });
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '/';
         if (req.method !== 'GET' || (url !== '/' && !url.startsWith('/?'))) {
@@ -232,6 +237,19 @@ function viewportVitePlugin(content, { buildInfo = null, htmlEntry = null } = {}
       server.watcher.on('unlink', (filePath) => {
         if (filePath.endsWith('.artboard.js')) server.ws.send({ type: 'full-reload' });
       });
+    },
+  };
+}
+
+function commentsPath(content) {
+  return path.join(content.viewportDir, 'comments.json');
+}
+
+function commentsPreviewPlugin(content) {
+  return {
+    name: 'viewport-comments',
+    configurePreviewServer(server) {
+      server.middlewares.use(createCommentsMiddleware(commentsPath(content)));
     },
   };
 }
@@ -293,7 +311,7 @@ function listFiles(dir, skipDirs) {
 
 function contentHash(content, outDir) {
   const files = [
-    ...listFiles(content.viewportDir, [outDir]),
+    ...listFiles(content.viewportDir, [outDir]).filter((file) => file !== commentsPath(content)),
     ...listFiles(path.join(packageRoot, 'src', 'engine'), []),
     ...[content.configPath, path.join(content.projectRoot, 'viewport.vite.js')].filter((file) => file && exists(file)),
   ].sort();
@@ -323,7 +341,8 @@ function hashedInputPaths(content) {
 function createBuildInfo(content, outDir) {
   const root = content.projectRoot;
   const relOut = normalizePath(path.relative(root, outDir));
-  const status = git(root, ['status', '--porcelain', '--', ...hashedInputPaths(content), `:(exclude)${relOut}`]);
+  const relComments = normalizePath(path.relative(root, commentsPath(content)));
+  const status = git(root, ['status', '--porcelain', '--', ...hashedInputPaths(content), `:(exclude)${relOut}`, `:(exclude)${relComments}`]);
   return {
     sha: git(root, ['rev-parse', '--short', 'HEAD']),
     dirty: status === null ? null : status.length > 0,
@@ -368,6 +387,7 @@ async function runPreview(args) {
     root: content.projectRoot,
     configFile: false,
     build: { outDir },
+    plugins: [commentsPreviewPlugin(content)],
     preview: { host: args.host, port: args.port, open: args.open, strictPort: true },
   });
   server.printUrls();

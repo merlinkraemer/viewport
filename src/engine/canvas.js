@@ -56,7 +56,7 @@ function readStoredCamera(page) {
   return null;
 }
 
-export function createCanvas({ viewport, documentStore, pinSidebar, registry, onSelectActiveArtboard }) {
+export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
   let currentPage;
   const cards = new Map();
   const projectFrames = new Map();
@@ -217,6 +217,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     world.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
     if (zoomLevel) zoomLevel.textContent = `${Math.round(s * 100)}%`;
     if (persist) persistCamera();
+    onCameraChange?.();
   }
   syncDOM({ persist: false });
 
@@ -509,6 +510,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       selectAndCopy(event);
     });
 
+    entry.element.commentBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onOpenComments?.(id, entry.element.commentBtn);
+    });
+
     entry.pinBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       documentStore.mutate((draft) => {
@@ -678,6 +684,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         cardEntry.pinBtn.setAttribute('aria-label', isPinned ? `Unpin "${title}"` : `Pin "${title}"`);
 
         cardEntry.renameBtn.hidden = false;
+        cardEntry.element.setCommentCount(comments.openCount(id), comments.list(id).length);
 
         cardEntry.element.style.left = `${state.position.x}px`;
         cardEntry.element.style.top = `${state.position.y}px`;
@@ -921,8 +928,13 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     applyCanvasLayout();
   }, 0);
 
+  function refreshComments() {
+    cards.forEach((entry, id) => entry.element.setCommentCount(comments.openCount(id), comments.list(id).length));
+  }
+
   return {
     render,
+    refreshComments,
     centerOn,
     fitGroup,
     navigateToCanvasNode,
