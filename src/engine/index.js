@@ -18,6 +18,7 @@ export { setEngineConfig };
  * @param {Array}   [options.layers]          taxonomy [{ key, label }]
  * @param {string}  [options.storageNamespace]
  * @param {string}  [options.defaultProjectName]
+ * @param {Array}   [options.areas]           sidebar areas [{ name, pages: [pageId] }]; unlisted pages go under "Other"
  * @param {object}  [options.build]           review build stamp { sha, dirty, builtAt, hash }; null in dev
  * @returns {{ documentStore, canvas, sidebar, pinSidebar, updateRegistry }}
  */
@@ -44,6 +45,7 @@ function mountViewport({
   storageNamespace,
   defaultProjectName,
   build = null,
+  areas = null,
 } = {}) {
   if (!mount) throw new Error('createViewport: `mount` element is required');
   if (!Array.isArray(registry)) throw new Error('createViewport: `registry` array is required');
@@ -318,6 +320,7 @@ function mountViewport({
 
     return {
       pages,
+      areas,
       activePage,
       groupOrder: sortGroups(activeRegistry),
       focusGroup: documentState.ui.focusGroup,

@@ -100,6 +100,14 @@ The user reviews a whole page at once by commenting on its cards and variations.
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
 
+Pages can be grouped by area in one optional file, `viewport/areas.json`, next to `comments.json`. Keys are area names, values are page ids; file order is sidebar order:
+
+```json
+{ "Foundations": ["controls-lab", "displays"], "Views": ["mixer", "device-view"] }
+```
+
+The sidebar shows each area name as a quiet header above its pages. Pages not listed go under a final "Other" area; without the file there are no headers. Unknown page ids are ignored.
+
 The sidebar is one tree: page → group → artboard, every node collapsed until opened. Artboard rows carry the card's number from the canvas. Right-click an artboard row to rename, pin, copy its id, open its comments or archive it. Click a page name to select it: the camera resets to the top-left of the page, fitted to its widest row (never below 40%). Only the chevron expands or folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens that page, and expands it when a board follows (`#checkout/option-b?step=2`; the rest is left to the artboards). A reload restores the saved camera while it still shows a board; a sidebar click always resets it. With a single page its groups are the top level and every card is mounted.
 
 ## Groups

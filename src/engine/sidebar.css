@@ -100,6 +100,25 @@
   color: var(--ff-text);
 }
 
+.sidebar-area {
+  margin-top: var(--ff-space-5);
+  padding: 0 var(--ff-space-2);
+  color: var(--ff-muted);
+  font-size: var(--ff-type-label);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.sidebar-area:first-child {
+  margin-top: 0;
+}
+
+.sidebar-area + .sidebar-row--page {
+  margin-top: var(--ff-space-2);
+}
+
 .sidebar-row--group {
   color: var(--ff-text-mid);
   font-size: var(--ff-type-compact);

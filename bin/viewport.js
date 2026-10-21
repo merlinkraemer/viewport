@@ -170,6 +170,7 @@ const app = createViewport({
   mount: document.getElementById('viewport'),
   registry: createRegistry(modules),
   build: ${JSON.stringify(buildInfo)},
+  areas: ${JSON.stringify(readAreas(content))},
   storageNamespace: config.storageNamespace ?? 'viewport',
   defaultProjectName: config.defaultProjectName ?? 'Default',
   layers: config.layers ?? [
@@ -219,6 +220,11 @@ function viewportVitePlugin(content, { buildInfo = null, htmlEntry = null } = {}
       server.middlewares.use(createCommentsMiddleware(commentsPath(content)));
       server.watcher.on('change', (filePath) => {
         if (path.resolve(filePath) === commentsPath(content)) server.ws.send({ type: 'custom', event: 'viewport:comments' });
+        if (path.resolve(filePath) === areasPath(content)) {
+          const entry = server.moduleGraph.getModuleById(VIRTUAL_ENTRY_ID);
+          if (entry) server.moduleGraph.invalidateModule(entry);
+          server.ws.send({ type: 'full-reload' });
+        }
       });
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '/';
@@ -239,6 +245,20 @@ function viewportVitePlugin(content, { buildInfo = null, htmlEntry = null } = {}
       });
     },
   };
+}
+
+function areasPath(content) {
+  return path.join(content.viewportDir, 'areas.json');
+}
+
+function readAreas(content) {
+  const file = areasPath(content);
+  if (!exists(file)) return null;
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const valid = data && typeof data === 'object' && !Array.isArray(data)
+    && Object.values(data).every((ids) => Array.isArray(ids) && ids.every((id) => typeof id === 'string'));
+  if (!valid) throw new Error(`${file} must map area names to arrays of page ids`);
+  return Object.entries(data).map(([name, pages]) => ({ name, pages }));
 }
 
 function commentsPath(content) {

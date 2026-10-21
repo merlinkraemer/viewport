@@ -35,6 +35,7 @@ export default function render() {
 - `render()` returns one DOM element.
 - `meta.layer` is one of the configured layers (`primitive`, `module`, `composite` by default).
 - **One page per focus area.** Each top-level folder under `artboards/` is a page (`artboards/checkout/…` is the page `checkout`); `meta.page` overrides it. Only the selected page is mounted, so pages keep a big project fast; never put every area on one page. Link the user to a page with its hash: `http://<host>:<port>/#checkout`.
+- Group many pages by area in `viewport/areas.json`: `{ "Foundations": ["controls-lab"], "Views": ["mixer"] }` (area name → page ids, file order = sidebar order). Unlisted pages go under "Other"; no file, no headers.
 - `meta.group` puts the card in a group inside its page. Without it, the folder under `artboards/` is the group. Each group is one headed band on the canvas; the user clicks a group name in the sidebar to see only that group.
 - `meta.order` sets the reading order inside the group (and the group's place on the page: the group with the lowest order comes first). Cards without it follow in file order.
 - `meta.id` overrides the id. Avoid it unless a file must move without breaking its id.

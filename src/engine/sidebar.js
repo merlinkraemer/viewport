@@ -250,6 +250,24 @@ export function createSidebar(options) {
     });
   }
 
+  function createAreaHeader(name) {
+    const header = document.createElement('div');
+    header.className = 'sidebar-area';
+    header.textContent = name;
+    return header;
+  }
+
+  function areaSections() {
+    if (!model.areas) return [{ name: null, pages: model.pages }];
+    const listed = new Set(model.areas.flatMap((area) => area.pages));
+    const sections = model.areas.map((area) => ({
+      name: area.name,
+      pages: area.pages.map((id) => model.pages.find((page) => page.id === id)).filter(Boolean),
+    }));
+    sections.push({ name: 'Other', pages: model.pages.filter((page) => !listed.has(page.id)) });
+    return sections;
+  }
+
   function buildTree() {
     const tree = document.createDocumentFragment();
     const expanded = new Set(model.ui?.expanded || []);
@@ -271,16 +289,21 @@ export function createSidebar(options) {
         appendChildren(tree, model.pages[0]?.id ?? null, artboards, level, expanded);
         return;
       }
-      model.pages.forEach((page) => {
-        const pageArtboards = artboards.filter((artboard) => artboard.page === page.id);
-        if (!pageArtboards.length) return;
-        const open = expanded.has(pageNodeKey(page.id));
-        tree.appendChild(createPageRow(page, open));
-        if (!open) return;
-        const children = document.createElement('div');
-        children.className = 'sidebar-children';
-        appendChildren(children, page.id, pageArtboards, level + 1, expanded);
-        tree.appendChild(children);
+      areaSections().forEach((section) => {
+        const pageRows = section.pages
+          .map((page) => ({ page, artboards: artboards.filter((artboard) => artboard.page === page.id) }))
+          .filter((entry) => entry.artboards.length);
+        if (!pageRows.length) return;
+        if (section.name) tree.appendChild(createAreaHeader(section.name));
+        pageRows.forEach(({ page, artboards: pageArtboards }) => {
+          const open = expanded.has(pageNodeKey(page.id));
+          tree.appendChild(createPageRow(page, open));
+          if (!open) return;
+          const children = document.createElement('div');
+          children.className = 'sidebar-children';
+          appendChildren(children, page.id, pageArtboards, level + 1, expanded);
+          tree.appendChild(children);
+        });
       });
     });
 
