@@ -5,9 +5,6 @@ export const BAND_PADDING = 24;
 export const GROUP_HEADER_HEIGHT = 44;
 const CARD_GAP = 48;
 const GROUP_GAP = 120;
-const ROW_WIDTH = 2400;
-const WIDE_WIDTH = 1200;
-const COLUMN_WIDTH_RATIO = 3;
 const DEFAULT_SIZE = { width: 320, height: 260 };
 
 function intersects(a, b) {
@@ -40,13 +37,6 @@ function orderedGroups(items) {
     .filter(({ items: members }) => members.length);
 }
 
-export function usesColumn(sizes) {
-  if (!sizes.length) return false;
-  const widths = sizes.map((size) => size.width);
-  const widest = Math.max(...widths);
-  return widest >= WIDE_WIDTH || widest > Math.min(...widths) * COLUMN_WIDTH_RATIO;
-}
-
 function layoutSet(doc, items) {
   const fixed = items
     .filter(({ id }) => doc.artboards[id].moved)
@@ -59,26 +49,17 @@ function layoutSet(doc, items) {
     if (!cards.length) return;
     y += GROUP_HEADER_HEIGHT;
     const sizeOf = (id) => doc.artboards[id].size || DEFAULT_SIZE;
-    const column = usesColumn(cards.map(({ id }) => sizeOf(id)));
     let x = left;
     let rowHeight = 0;
 
-    const newRow = (minY = 0) => {
-      y = Math.max(y + (rowHeight ? rowHeight + CARD_GAP : 0), minY);
-      x = left;
-      rowHeight = 0;
-    };
-
     cards.forEach(({ id }) => {
       const size = sizeOf(id);
-      if (x > left && (column || x + size.width > left + ROW_WIDTH)) newRow();
 
       for (let guard = 0; guard < 1000; guard += 1) {
         const rect = { x, y, ...size };
         const blocker = fixed.find((other) => intersects(rect, other));
         if (!blocker) break;
         x = blocker.x + blocker.width;
-        if (x > left && x + size.width > left + ROW_WIDTH) newRow(blocker.y + blocker.height);
       }
 
       doc.artboards[id].position = { x, y };
