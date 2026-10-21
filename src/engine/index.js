@@ -1,10 +1,10 @@
-import { setEngineConfig, artboardGroup, LAYER_GROUPS, listPages, pageId } from './config.js';
+import { setEngineConfig, artboardGroup, LAYER_GROUPS, listPages } from './config.js';
 import { createCanvas } from './canvas.js';
-import { createSidebar } from './sidebar.js';
+import { createSidebar, pageNodeKey } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
 import { loadInitialDocument, createDocumentStore } from './document-store.js';
-import { showTextDialog } from './sidebar-context-menu.js';
-import { getPrimaryArtboardNote, upsertArtboardPrimaryNote } from './notes.js';
+import { createCommentsStore } from './comments.js';
+import { createCommentThread } from './comment-thread.js';
 import { copyText } from './dom.js';
 
 export { setEngineConfig };
@@ -66,23 +66,37 @@ export function createViewport({
   }
 
   const bootstrapDoc = loadInitialDocument(activeRegistry);
-  bootstrapDoc.ui.activePage = resolvePage(pageFromHash() ?? bootstrapDoc.ui.activePage);
+  const linkedPage = pageFromHash();
+  if (linkedPage && linkedPage !== bootstrapDoc.ui.activePage && !bootstrapDoc.ui.expanded.includes(pageNodeKey(linkedPage))) {
+    bootstrapDoc.ui.expanded.push(pageNodeKey(linkedPage));
+  }
+  bootstrapDoc.ui.activePage = resolvePage(linkedPage ?? bootstrapDoc.ui.activePage);
   reflectPage(bootstrapDoc.ui.activePage);
   const documentStore = createDocumentStore(bootstrapDoc);
 
-  function selectPage(page) {
+  function selectPage(page, { expand = false } = {}) {
     const next = resolvePage(page);
     reflectPage(next);
-    if (documentStore.get().ui.activePage === next) return;
+    const { ui } = documentStore.get();
+    const expandKey = expand && next && !ui.expanded.includes(pageNodeKey(next)) ? pageNodeKey(next) : null;
+    if (ui.activePage === next && !expandKey) return;
     documentStore.mutate((draft) => {
-      draft.ui.activePage = next;
-      draft.ui.focusGroup = null;
+      if (draft.ui.activePage !== next) {
+        draft.ui.activePage = next;
+        draft.ui.focusGroup = null;
+      }
+      if (expandKey) draft.ui.expanded.push(expandKey);
     });
+  }
+
+  function selectPageOf(artboardId) {
+    const page = documentStore.get().artboards[artboardId]?.page;
+    if (page && pages.length > 1) selectPage(page);
   }
 
   window.addEventListener('hashchange', () => {
     const page = pageFromHash();
-    if (page) selectPage(page);
+    if (page) selectPage(page, { expand: true });
   });
 
   const pinSidebar = createPinSidebar({
@@ -92,17 +106,41 @@ export function createViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
+  const comments = createCommentsStore({
+    onChange() {
+      canvas.refreshComments();
+      commentThread.refresh();
+      sidebar.render(buildSidebarModel(documentStore.get()));
+    },
+  });
+  const commentThread = createCommentThread(comments);
+
+  function openComments(artboardId, anchor) {
+    const button = anchor || mount.querySelector(`[data-artboard-id="${CSS.escape(artboardId)}"] .ff-card__comments`);
+    if (button) commentThread.open(artboardId, button);
+  }
+
   const canvas = createCanvas({
     viewport: mount,
     documentStore,
     pinSidebar,
     registry: activeRegistry,
+    comments,
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
+    onOpenComments: openComments,
+    onCameraChange: () => commentThread.reposition(),
   });
 
   const sidebar = createSidebar({
     build,
-    onSelectPage: selectPage,
+    onSelectPage: (page) => selectPage(page, { expand: true }),
+    onToggleNode(key) {
+      documentStore.mutate((draft) => {
+        const expanded = new Set(draft.ui.expanded);
+        if (!expanded.delete(key)) expanded.add(key);
+        draft.ui.expanded = [...expanded];
+      });
+    },
     onSelectActiveProject(projectId) {
       documentStore.mutate((draft) => {
         draft.ui.activeProjectId = projectId;
@@ -115,12 +153,15 @@ export function createViewport({
       });
     },
     onNavigateArtboard(artboardId) {
+      selectPageOf(artboardId);
       canvas.centerOn(artboardId);
     },
-    onFocusGroup(group) {
+    onFocusGroup(group, { page, nodeKey } = {}) {
+      if (page) selectPage(page);
       const next = documentStore.get().ui.focusGroup === group ? null : group;
       documentStore.mutate((draft) => {
         draft.ui.focusGroup = next;
+        if (next && nodeKey && !draft.ui.expanded.includes(nodeKey)) draft.ui.expanded.push(nodeKey);
       });
       if (next) canvas.fitGroup(next);
     },
@@ -183,27 +224,17 @@ export function createViewport({
         }
       });
     },
-    onEditArtboardNote(artboardId) {
-      const state = documentStore.get();
-      const note = getPrimaryArtboardNote(state, artboardId);
-      showTextDialog({
-        title: `Note: ${artboardId}`,
-        initialValue: note?.text || '',
-        placeholder: 'Add a note for this artboard...',
-        confirmLabel: 'Save',
-        onSubmit: (value) => {
-          documentStore.mutate((draft) => {
-            upsertArtboardPrimaryNote(draft, artboardId, value);
-          });
-        },
-      });
+    onOpenComments(artboardId) {
+      selectPageOf(artboardId);
+      canvas.centerOn(artboardId);
+      openComments(artboardId);
     },
     onReorderProjectArtboards(projectId, orderedIds) {
       documentStore.mutate((draft) => {
-        orderedIds.forEach((id, index) => {
-          if (draft.artboards[id] && draft.artboards[id].projectId === projectId) {
-            draft.artboards[id].sidebarOrder = index;
-          }
+        const ids = orderedIds.filter((id) => draft.artboards[id]?.projectId === projectId);
+        const slots = ids.map((id) => draft.artboards[id].sidebarOrder).sort((a, b) => a - b);
+        ids.forEach((id, index) => {
+          draft.artboards[id].sidebarOrder = slots[index];
         });
       });
     },
@@ -221,15 +252,14 @@ export function createViewport({
       artboardsByProject[project.id] = [];
     });
 
+    const registryById = new Map(activeRegistry.map((entry) => [entry.id, entry]));
     const archivedArtboards = [];
     const activePage = documentState.ui.activePage;
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
       if (artboard.orphaned) return;
-      if (activePage && artboard.page !== activePage) return;
 
-      const regEntry = activeRegistry.find((r) => r.id === id);
+      const regEntry = registryById.get(id);
       const layer = regEntry ? regEntry.layer : 'primitive';
-      const group = artboardGroup(regEntry || { layer });
 
       const modelEntry = {
         id,
@@ -237,13 +267,14 @@ export function createViewport({
         displayName: artboard.displayName,
         projectId: artboard.projectId,
         pinned: artboard.pinned && !artboard.archived,
-        noteCount: (documentState.notes || []).filter((n) => n.target?.artboardId === id).length,
+        commentCount: comments.openCount(id),
         sidebarOrder: artboard.sidebarOrder,
         layer,
-        group,
+        page: artboard.page,
+        group: artboardGroup(regEntry || { layer }),
       };
-      if (artboard.archived) archivedArtboards.push(modelEntry);
-      else artboardsByProject[artboard.projectId]?.push(modelEntry);
+      if (!artboard.archived) artboardsByProject[artboard.projectId]?.push(modelEntry);
+      else if (!activePage || artboard.page === activePage) archivedArtboards.push(modelEntry);
     });
 
     Object.values(artboardsByProject).forEach((rows) => {
@@ -251,13 +282,11 @@ export function createViewport({
     });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
-    const pageRegistry = activePage ? activeRegistry.filter((entry) => pageId(entry) === activePage) : activeRegistry;
-    const namedGroups = [...new Set(pageRegistry.map((entry) => entry.group).filter(Boolean))];
+    const namedGroups = [...new Set(activeRegistry.map((entry) => entry.group).filter(Boolean))];
     return {
       pages,
       activePage,
-      groups: [...namedGroups, ...LAYER_GROUPS],
-      hideEmptyGroups: namedGroups.length > 0,
+      groupOrder: [...namedGroups, ...LAYER_GROUPS],
       focusGroup: documentState.ui.focusGroup,
       projects: documentState.projects,
       activeProjectId: documentState.ui.activeProjectId,
@@ -276,7 +305,20 @@ export function createViewport({
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
 
-  setTimeout(() => documentStore.resolveOverlaps(), 200);
+  setTimeout(() => documentStore.relayout(activeRegistry), 200);
+
+  async function migrateLocalNotes() {
+    const notes = (documentStore.get().notes || []).filter((note) => note.text?.trim());
+    if (!notes.length || !comments.isAvailable()) return;
+    for (const note of notes) await comments.add(note.target.artboardId, note.text);
+    documentStore.mutate((draft) => {
+      draft.notes = [];
+    });
+  }
+
+  comments.load()
+    .then(migrateLocalNotes)
+    .catch((err) => console.error('Failed to move local notes into comments.json', err));
 
   function updateRegistry(nextRegistry, { changedIds } = {}) {
     if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');

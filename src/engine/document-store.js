@@ -1,11 +1,8 @@
 import { storageKey, getDefaultProjectName, pageId } from './config.js';
+import { layoutPages, LAYOUT_ORIGIN } from './layout.js';
 
 const DOC_VERSION = 1;
 const DEFAULT_PROJECT_ID = 'default';
-const ARTBOARD_BASE_X = 48;
-const ARTBOARD_BASE_Y = 56;
-const ARTBOARD_COL_SPACING = 360;
-const ARTBOARD_ROW_SPACING = 300;
 
 const DEFAULT_UI = {
   leftSidebarOpen: true,
@@ -15,6 +12,7 @@ const DEFAULT_UI = {
   activeProjectId: DEFAULT_PROJECT_ID,
   focusGroup: null,
   activePage: null,
+  expanded: [],
   layoutVersion: 1,
 };
 
@@ -96,6 +94,7 @@ function normalizeUi(ui) {
     activeProjectId: typeof ui?.activeProjectId === 'string' && ui.activeProjectId ? ui.activeProjectId : DEFAULT_PROJECT_ID,
     focusGroup: typeof ui?.focusGroup === 'string' && ui.focusGroup ? ui.focusGroup : null,
     activePage: typeof ui?.activePage === 'string' && ui.activePage ? ui.activePage : null,
+    expanded: Array.isArray(ui?.expanded) ? [...new Set(ui.expanded.filter((key) => typeof key === 'string'))] : [],
     layoutVersion: Number.isFinite(ui?.layoutVersion) ? ui.layoutVersion : DEFAULT_UI.layoutVersion,
   };
 }
@@ -142,6 +141,7 @@ function normalizeArtboard(id, artboard, projectIds) {
     archived: Boolean(artboard?.archived),
     pinned: Boolean(artboard?.pinned),
     sidebarOrder: Number.isFinite(artboard?.sidebarOrder) ? artboard.sidebarOrder : 0,
+    moved: Boolean(artboard?.moved),
     orphaned: Boolean(artboard?.orphaned),
     page: typeof artboard?.page === 'string' && artboard.page ? artboard.page : null,
   };
@@ -181,12 +181,6 @@ function ensureVisibleRegistryArtboards(doc, registry) {
     if (!artboard) return;
     artboard.archived = false;
     artboard.orphaned = false;
-    if (!artboard.position) {
-      artboard.position = {
-        x: ARTBOARD_BASE_X + (index % 3) * ARTBOARD_COL_SPACING,
-        y: ARTBOARD_BASE_Y + Math.floor(index / 3) * ARTBOARD_ROW_SPACING,
-      };
-    }
     if (!Number.isFinite(artboard.sidebarOrder)) {
       artboard.sidebarOrder = index;
     }
@@ -224,16 +218,6 @@ function getProjectArtboardCount(doc, projectId) {
   return Object.values(doc.artboards).filter((entry) => entry.projectId === projectId).length;
 }
 
-function getAutoPosition(doc, projectId, page = null) {
-  const index = Object.values(doc.artboards).filter((entry) => entry.projectId === projectId && (entry.page ?? null) === page).length;
-  const col = index % 3;
-  const row = Math.floor(index / 3);
-  return {
-    x: ARTBOARD_BASE_X + col * ARTBOARD_COL_SPACING,
-    y: ARTBOARD_BASE_Y + row * ARTBOARD_ROW_SPACING,
-  };
-}
-
 function syncRegistry(doc, registry) {
   const projectIds = new Set(doc.projects.map((project) => project.id));
   registry.forEach((entry) => {
@@ -243,11 +227,12 @@ function syncRegistry(doc, registry) {
         sourceTitle: entry.sourceTitle,
         displayName: null,
         projectId,
-        position: getAutoPosition(doc, projectId, pageId(entry)),
+        position: { ...LAYOUT_ORIGIN },
         size: null,
         archived: false,
         pinned: false,
         sidebarOrder: getProjectArtboardCount(doc, projectId),
+        moved: false,
         orphaned: false,
         page: pageId(entry),
       };
@@ -266,131 +251,13 @@ function syncRegistry(doc, registry) {
     if (!projectIds.has(doc.artboards[id].projectId)) {
       doc.artboards[id].projectId = DEFAULT_PROJECT_ID;
     }
-    if (!doc.artboards[id].position) {
-      doc.artboards[id].position = getAutoPosition(doc, doc.artboards[id].projectId);
-    }
   });
 
   normalizeSidebarOrder(doc);
   ensureSinglePin(doc);
   ensureVisibleRegistryArtboards(doc, registry);
-  reflowLegacyDenseGrid(doc, registry);
-  resolveAllOverlaps(doc);
+  layoutPages(doc, registry);
   return doc;
-}
-
-function isLegacyDenseGridPosition(position) {
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return false;
-  const xOffset = position.x - 48;
-  const yOffset = position.y - 56;
-  return xOffset % 520 === 0 && yOffset % 360 === 0;
-}
-
-function reflowLegacyDenseGrid(doc, registry) {
-  const registryIds = new Set(registry.map((entry) => entry.id));
-  doc.projects.forEach((project) => {
-    const ids = Object.keys(doc.artboards)
-      .filter((id) => {
-        const artboard = doc.artboards[id];
-        return (
-          artboard.projectId === project.id &&
-          !artboard.archived &&
-          !artboard.orphaned &&
-          registryIds.has(id)
-        );
-      })
-      .sort((a, b) => doc.artboards[a].sidebarOrder - doc.artboards[b].sidebarOrder);
-
-    if (!ids.length) return;
-    const allLegacy = ids.every((id) => isLegacyDenseGridPosition(doc.artboards[id].position));
-    if (!allLegacy) return;
-
-    ids.forEach((id, index) => {
-      const col = index % 3;
-      const row = Math.floor(index / 3);
-      doc.artboards[id].position = {
-        x: ARTBOARD_BASE_X + col * ARTBOARD_COL_SPACING,
-        y: ARTBOARD_BASE_Y + row * ARTBOARD_ROW_SPACING,
-      };
-      doc.artboards[id].sidebarOrder = index;
-    });
-  });
-}
-
-export function resolveAllOverlaps(doc) {
-  const GAP = 24;
-
-  const layoutSets = new Map();
-  Object.keys(doc.artboards).forEach((id) => {
-    const artboard = doc.artboards[id];
-    if (artboard.archived || artboard.orphaned) return;
-    const key = `${artboard.projectId}\u0000${artboard.page ?? ''}`;
-    if (!layoutSets.has(key)) layoutSets.set(key, []);
-    layoutSets.get(key).push(id);
-  });
-
-  layoutSets.forEach((ids) => {
-    ids.sort((a, b) => {
-      const posA = doc.artboards[a].position;
-      const posB = doc.artboards[b].position;
-      if (posA.y !== posB.y) return posA.y - posB.y;
-      return posA.x - posB.x;
-    });
-
-    const positionedRects = [];
-
-    ids.forEach((id) => {
-      const artboard = doc.artboards[id];
-      const size = artboard.size || { width: 320, height: 260 };
-      
-      let x = artboard.position.x;
-      let y = artboard.position.y;
-      let w = size.width;
-      let h = size.height;
-
-      let hasOverlap = true;
-      let iterations = 0;
-      while (hasOverlap && iterations < 100) {
-        hasOverlap = false;
-        const rectB = { left: x, top: y, right: x + w, bottom: y + h };
-
-        for (const rectA of positionedRects) {
-          const intersects = rectA.left < rectB.right &&
-                             rectA.right > rectB.left &&
-                             rectA.top < rectB.bottom &&
-                             rectA.bottom > rectB.top;
-          
-          if (intersects) {
-            hasOverlap = true;
-            const shiftRight = rectA.right + GAP - rectB.left;
-            const shiftDown = rectA.bottom + GAP - rectB.top;
-
-            if (shiftRight < shiftDown) {
-              x += shiftRight;
-            } else {
-              y += shiftDown;
-            }
-            x = Math.round(x / 8) * 8;
-            y = Math.round(y / 8) * 8;
-            break;
-          }
-        }
-        iterations++;
-      }
-
-      positionedRects.push({
-        id,
-        left: x,
-        top: y,
-        right: x + w,
-        bottom: y + h
-      });
-
-      if (x !== artboard.position.x || y !== artboard.position.y) {
-        artboard.position = { x, y };
-      }
-    });
-  });
 }
 
 export function loadInitialDocument(registry) {
@@ -493,9 +360,9 @@ export function createDocumentStore(initialDoc) {
       });
       return id;
     },
-    resolveOverlaps() {
+    relayout(registry) {
       mutate((draft) => {
-        resolveAllOverlaps(draft);
+        layoutPages(draft, registry);
       });
     },
   };

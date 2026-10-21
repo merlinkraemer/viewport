@@ -7,8 +7,9 @@ import { copyText } from './dom.js';
 import { storageKey, artboardGroup } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
+import { layoutPages, GROUP_HEADER_HEIGHT } from './layout.js';
 
-const SCALE_BY = 1.05;
+const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
 const SNAP = 8;
@@ -27,7 +28,7 @@ function debounce(fn, ms) {
   };
 }
 
-const FIRST_MEASURE_SETTLE_MS = 150;
+const MEASURE_SETTLE_MS = 150;
 
 function cameraKey(page) {
   return storageKey(page ? `camera:${page}` : 'camera');
@@ -55,13 +56,14 @@ function readStoredCamera(page) {
   return null;
 }
 
-export function createCanvas({ viewport, documentStore, pinSidebar, registry, onSelectActiveArtboard }) {
+export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
   let currentPage;
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
+  const groupHeaderEls = new Map();
   const selectedIds = new Set();
-  const resolveAfterFirstMeasure = debounce(() => documentStore.resolveOverlaps(), FIRST_MEASURE_SETTLE_MS);
+  const relayoutAfterMeasure = debounce(() => documentStore.relayout(registry), MEASURE_SETTLE_MS);
 
   let leftSidebarWidth = 220;
   let pinSidebarWidth = pinSidebar.getWidth();
@@ -215,6 +217,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     world.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
     if (zoomLevel) zoomLevel.textContent = `${Math.round(s * 100)}%`;
     if (persist) persistCamera();
+    onCameraChange?.();
   }
   syncDOM({ persist: false });
 
@@ -230,34 +233,35 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     };
   }
 
+  function zoomAt(clientX, clientY, nextScale) {
+    const r = viewport.getBoundingClientRect();
+    const px = clientX - r.left;
+    const py = clientY - r.top;
+    const oldScale = stage.scaleX();
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+    const mousePointTo = {
+      x: (px - stage.x()) / oldScale,
+      y: (py - stage.y()) / oldScale,
+    };
+    stage.scale({ x: newScale, y: newScale });
+    stage.position({
+      x: px - mousePointTo.x * newScale,
+      y: py - mousePointTo.y * newScale,
+    });
+    stage.batchDraw();
+    syncDOM();
+  }
+
+  let lastPinchWheelAt = 0;
+
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
 
-    const r = viewport.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
-
     if (e.ctrlKey || e.metaKey) {
-      const oldScale = stage.scaleX();
-      const mousePointTo = {
-        x: (px - stage.x()) / oldScale,
-        y: (py - stage.y()) / oldScale,
-      };
-
-      let direction = e.deltaY > 0 ? 1 : -1;
-      if (e.ctrlKey || e.metaKey) direction = -direction;
-
-      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE,
-        direction > 0 ? oldScale * SCALE_BY : oldScale / SCALE_BY
-      ));
-
-      stage.scale({ x: newScale, y: newScale });
-      stage.position({
-        x: px - mousePointTo.x * newScale,
-        y: py - mousePointTo.y * newScale,
-      });
-      stage.batchDraw();
-      syncDOM();
+      lastPinchWheelAt = e.timeStamp;
+      const lineScale = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const delta = Math.max(-PINCH_DELTA_CAP, Math.min(PINCH_DELTA_CAP, e.deltaY * lineScale));
+      zoomAt(e.clientX, e.clientY, stage.scaleX() * Math.exp(-delta / 100));
     } else {
       const scale = stage.scaleX();
       const dx = e.deltaX / scale;
@@ -271,6 +275,26 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     }
   }, { passive: false });
 
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  }, { passive: false });
+
+  let gestureStartScale = null;
+  document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    gestureStartScale = stage.scaleX();
+  }, { passive: false });
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (gestureStartScale === null || e.timeStamp - lastPinchWheelAt < 200) return;
+    if (!viewport.contains(e.target)) return;
+    zoomAt(e.clientX, e.clientY, gestureStartScale * e.scale);
+  }, { passive: false });
+  document.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+    gestureStartScale = null;
+  }, { passive: false });
+
   const pendingSizes = new Map();
   let sizeFlushTimer = null;
   function flushSizes() {
@@ -280,7 +304,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       const current = doc.artboards[id]?.size;
       return doc.artboards[id] && (!current || current.width !== size.width || current.height !== size.height);
     });
-    const firstMeasure = changed.some(([id]) => !doc.artboards[id].size);
     pendingSizes.clear();
     if (!changed.length) return;
     documentStore.mutate((draft) => {
@@ -288,7 +311,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         if (draft.artboards[id]) draft.artboards[id].size = size;
       });
     }, { persist: true });
-    if (firstMeasure) resolveAfterFirstMeasure();
+    relayoutAfterMeasure();
   }
 
   function queueSize(id, size) {
@@ -357,6 +380,57 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       .sort((a, b) => documentState.artboards[a].sidebarOrder - documentState.artboards[b].sidebarOrder);
   }
 
+  function getGroupHeaders(documentState, projectId) {
+    const groups = new Map();
+    registry.forEach((entry) => {
+      const artboard = documentState.artboards[entry.id];
+      if (!artboard || artboard.projectId !== projectId || artboard.archived || artboard.orphaned) return;
+      if (!onActivePage(documentState, artboard)) return;
+      const group = artboardGroup(entry);
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(artboard);
+    });
+    if (groups.size < 2) return [];
+    return [...groups].map(([group, artboards]) => {
+      const placed = artboards.filter((artboard) => !artboard.moved);
+      const anchors = placed.length ? placed : artboards;
+      return {
+        group,
+        count: artboards.length,
+        x: Math.min(...anchors.map((artboard) => artboard.position.x)),
+        y: Math.min(...anchors.map((artboard) => artboard.position.y)) - GROUP_HEADER_HEIGHT,
+      };
+    });
+  }
+
+  function renderGroupHeaders(documentState, focusGroup) {
+    const rendered = new Set();
+    documentState.projects.forEach((project) => {
+      if (project.collapsed) return;
+      getGroupHeaders(documentState, project.id).forEach((header) => {
+        const key = `${project.id}\u0000${header.group}`;
+        let el = groupHeaderEls.get(key);
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'canvas-group-header';
+          el.dataset.group = header.group;
+          groupHeaderEls.set(key, el);
+        }
+        el.textContent = `${header.group} · ${header.count}`;
+        el.style.left = `${header.x}px`;
+        el.style.top = `${header.y}px`;
+        el.style.display = focusGroup !== null && focusGroup !== header.group ? 'none' : '';
+        if (!el.parentNode) world.appendChild(el);
+        rendered.add(key);
+      });
+    });
+    groupHeaderEls.forEach((el, key) => {
+      if (rendered.has(key)) return;
+      el.remove();
+      groupHeaderEls.delete(key);
+    });
+  }
+
   function getProjectToggleAnchor(documentState, projectId, projectIndex) {
     const ids = getProjectVisibleArtboardIds(documentState, projectId);
     if (!ids.length) {
@@ -375,7 +449,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     });
     return {
       x: Number.isFinite(minX) ? minX : ARTBOARD_BASE_X,
-      y: Number.isFinite(minY) ? Math.max(0, minY - 28) : ARTBOARD_BASE_Y + projectIndex * 28,
+      y: Number.isFinite(minY) ? Math.max(0, minY - 28 - (getGroupHeaders(documentState, projectId).length ? GROUP_HEADER_HEIGHT : 0)) : ARTBOARD_BASE_Y + projectIndex * 28,
     };
   }
 
@@ -434,6 +508,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     entry.element.idBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       selectAndCopy(event);
+    });
+
+    entry.element.commentBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onOpenComments?.(id, entry.element.commentBtn);
     });
 
     entry.pinBtn.addEventListener('click', (event) => {
@@ -519,6 +598,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         documentStore.mutate((draft) => {
           if (!draft.artboards[id]) return;
           draft.artboards[id].position = { x: snappedX, y: snappedY };
+          draft.artboards[id].moved = true;
+          layoutPages(draft, registry);
         });
       };
 
@@ -603,6 +684,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         cardEntry.pinBtn.setAttribute('aria-label', isPinned ? `Unpin "${title}"` : `Pin "${title}"`);
 
         cardEntry.renameBtn.hidden = false;
+        cardEntry.element.setCommentCount(comments.openCount(id), comments.list(id).length);
 
         cardEntry.element.style.left = `${state.position.x}px`;
         cardEntry.element.style.top = `${state.position.y}px`;
@@ -616,6 +698,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         renderedIds.add(id);
       });
     });
+
+    renderGroupHeaders(documentState, focusGroup);
 
     cards.forEach((entry, id) => {
       if (!renderedIds.has(id)) {
@@ -844,8 +928,13 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     applyCanvasLayout();
   }, 0);
 
+  function refreshComments() {
+    cards.forEach((entry, id) => entry.element.setCommentCount(comments.openCount(id), comments.list(id).length));
+  }
+
   return {
     render,
+    refreshComments,
     centerOn,
     fitGroup,
     navigateToCanvasNode,

@@ -60,6 +60,7 @@ Every artboard exports `meta` and a default `render()` that returns one DOM elem
 | `layer` | one of the configured layers (`primitive`, `module`, `composite`) |
 | `page` | page the card lives on; defaults to the top-level folder under `artboards/` |
 | `group` | sidebar group inside the page; defaults to the artboard's folder |
+| `order` | optional number; sorts the card before unordered ones in its group |
 | `id` | optional id override; defaults to the file path |
 
 ## Feedback by id
@@ -72,15 +73,36 @@ checkout/option-b  →  viewport/artboards/checkout/option-b.artboard.js
 
 An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards`. The copy button in the sidebar copies the same id; shift-click there adds name and file.
 
+## Comments
+
+Each card header has a comment button with a count of open comments. It opens a small thread: add a comment (⌘/Ctrl+Enter), edit one, resolve or reopen it. The sidebar's comment button opens the same thread.
+
+Comments live in `viewport/comments.json`, a file the agent reads and edits, keyed by artboard id:
+
+```json
+{
+  "checkout/option-b": [
+    { "id": "c-mvho97zf-64c076", "text": "Tighter rows", "at": "2026-10-21T05:28:48.555Z", "resolved": false },
+    { "id": "c-mvhoa1b2-a1b2c3", "text": "Done: rows at 8px", "at": "2026-10-21T06:02:10.000Z", "resolved": false, "by": "agent" }
+  ]
+}
+```
+
+Both `npx viewport` and `npx viewport preview` serve `GET`/`POST`/`PATCH` on `__viewport/comments`, so a review build on a phone saves comments too. Each write rereads the file, so edits an agent made in between survive, and replaces it atomically. A file with broken JSON is never overwritten; the server answers 409 until it is fixed. Another static server shows comments read-only. In dev, an agent's edit to the file shows up live. Comments are not part of the build hash. Notes from older versions, kept in the browser, move into the file on the first load with a server.
+
 ## Pages
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
 
-The Pages section at the top of the sidebar lists them. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. The page is the first segment of the URL hash (`#checkout`), so a link opens that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page the section is hidden and every card is mounted.
+The sidebar is one tree: page → group → artboard, every node collapsed until opened. Click a page name to select it and expand it; the chevron only folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens and expands that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page its groups are the top level and every card is mounted.
 
 ## Groups
 
-Inside a page, the sidebar lists its groups: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard in the list to zoom to it. The chevron collapses a group.
+Inside a page, the tree lists its groups when there is more than one: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Pages and groups show their artboard count. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard to zoom to it. The chevron folds a group.
+
+## Layout
+
+Each page lays itself out: groups stack top to bottom under a header, cards sit left-aligned in rows with even gaps, and a wide card gets a row of its own. Inside a group the order is `meta.order`, then file order. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
 
 ## Review build
 

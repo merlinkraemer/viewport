@@ -1,3 +1,8 @@
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+
 .canvas-viewport {
   position: absolute;
   top: 0;
@@ -487,4 +492,17 @@
 .canvas-copy-toast--visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.canvas-group-header {
+  position: absolute;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  color: var(--ff-muted);
+  font-size: var(--ff-type-caption);
+  font-family: var(--ff-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
