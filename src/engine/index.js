@@ -169,7 +169,7 @@ function mountViewport({
 
   const sidebar = createSidebar({
     build,
-    onSelectPage: (page) => selectPage(page, { expand: true }),
+    onSelectPage: (page) => selectPage(page),
     onToggleNode(key) {
       documentStore.mutate((draft) => {
         const expanded = new Set(draft.ui.expanded);
@@ -181,12 +181,11 @@ function mountViewport({
       selectPageOf(artboardId);
       canvas.centerOn(artboardId);
     },
-    onFocusGroup(group, { page, nodeKey } = {}) {
+    onFocusGroup(group, { page } = {}) {
       if (page) selectPage(page);
       const next = documentStore.get().ui.focusGroup === group ? null : group;
       documentStore.mutate((draft) => {
         draft.ui.focusGroup = next;
-        if (next && nodeKey && !draft.ui.expanded.includes(nodeKey)) draft.ui.expanded.push(nodeKey);
       });
       if (next) canvas.fitGroup(next);
     },

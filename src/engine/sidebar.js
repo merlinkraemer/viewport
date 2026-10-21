@@ -202,7 +202,7 @@ export function createSidebar(options) {
     row.classList.toggle('sidebar-row--active', focused);
     row.title = focused ? 'Show all groups' : `Show only ${group.label}`;
     row.append(createChevron(open, () => options.onToggleNode?.(nodeKey)), row.labelEl);
-    row.addEventListener('click', () => options.onFocusGroup?.(group.name, { page, nodeKey }));
+    row.addEventListener('click', () => options.onFocusGroup?.(group.name, { page }));
     return row;
   }
 
@@ -238,7 +238,6 @@ export function createSidebar(options) {
     const open = expanded.has(ARCHIVE_NODE_KEY);
     const row = createRow('archive', 0, 'Archived');
     row.append(createChevron(open, () => options.onToggleNode?.(ARCHIVE_NODE_KEY)), row.labelEl);
-    row.addEventListener('click', () => options.onToggleNode?.(ARCHIVE_NODE_KEY));
     container.appendChild(row);
     if (!open) return;
     model.archivedArtboards.forEach((artboard) => {

@@ -491,19 +491,34 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     return !page || artboard.page === page;
   }
 
+  function cameraShowsAnyArtboard(camera, artboards) {
+    const { left, right } = getCanvasInsets();
+    const view = {
+      x: (left - camera.x) / camera.scale,
+      y: -camera.y / camera.scale,
+      width: (window.innerWidth - left - right) / camera.scale,
+      height: window.innerHeight / camera.scale,
+    };
+    return artboards.some((artboard) => {
+      const { width, height } = cardSize(artboard);
+      const { x, y } = artboard.position;
+      return x < view.x + view.width && x + width > view.x && y < view.y + view.height && y + height > view.y;
+    });
+  }
+
   function showPage(documentState) {
     const page = documentState.ui.activePage;
     if (page === currentPage) return;
     if (currentPage !== undefined) writeCamera();
     currentPage = page;
+    const pageArtboards = Object.values(documentState.artboards)
+      .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard));
     const stored = readStoredCamera(page);
-    if (stored) {
+    if (stored && (!pageArtboards.length || cameraShowsAnyArtboard(stored, pageArtboards))) {
       stage.scale({ x: stored.scale, y: stored.scale });
       stage.position({ x: stored.x, y: stored.y });
     } else {
-      const positions = Object.values(documentState.artboards)
-        .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard))
-        .map((artboard) => artboard.position);
+      const positions = pageArtboards.map((artboard) => artboard.position);
       const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
       const minX = positions.length ? Math.min(...positions.map((p) => p.x), ...bands.map((band) => band.x)) : 0;
       const minY = positions.length ? Math.min(...positions.map((p) => p.y), ...bands.map((band) => band.y)) : 0;
