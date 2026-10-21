@@ -7,6 +7,7 @@ import { copyText } from './dom.js';
 import { storageKey, artboardGroup } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
+import { layoutPages, GROUP_HEADER_HEIGHT } from './layout.js';
 
 const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
@@ -27,7 +28,7 @@ function debounce(fn, ms) {
   };
 }
 
-const FIRST_MEASURE_SETTLE_MS = 150;
+const MEASURE_SETTLE_MS = 150;
 
 function cameraKey(page) {
   return storageKey(page ? `camera:${page}` : 'camera');
@@ -60,8 +61,9 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
+  const groupHeaderEls = new Map();
   const selectedIds = new Set();
-  const resolveAfterFirstMeasure = debounce(() => documentStore.resolveOverlaps(), FIRST_MEASURE_SETTLE_MS);
+  const relayoutAfterMeasure = debounce(() => documentStore.relayout(registry), MEASURE_SETTLE_MS);
 
   let leftSidebarWidth = 220;
   let pinSidebarWidth = pinSidebar.getWidth();
@@ -301,7 +303,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       const current = doc.artboards[id]?.size;
       return doc.artboards[id] && (!current || current.width !== size.width || current.height !== size.height);
     });
-    const firstMeasure = changed.some(([id]) => !doc.artboards[id].size);
     pendingSizes.clear();
     if (!changed.length) return;
     documentStore.mutate((draft) => {
@@ -309,7 +310,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         if (draft.artboards[id]) draft.artboards[id].size = size;
       });
     }, { persist: true });
-    if (firstMeasure) resolveAfterFirstMeasure();
+    relayoutAfterMeasure();
   }
 
   function queueSize(id, size) {
@@ -378,6 +379,57 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       .sort((a, b) => documentState.artboards[a].sidebarOrder - documentState.artboards[b].sidebarOrder);
   }
 
+  function getGroupHeaders(documentState, projectId) {
+    const groups = new Map();
+    registry.forEach((entry) => {
+      const artboard = documentState.artboards[entry.id];
+      if (!artboard || artboard.projectId !== projectId || artboard.archived || artboard.orphaned) return;
+      if (!onActivePage(documentState, artboard)) return;
+      const group = artboardGroup(entry);
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(artboard);
+    });
+    if (groups.size < 2) return [];
+    return [...groups].map(([group, artboards]) => {
+      const placed = artboards.filter((artboard) => !artboard.moved);
+      const anchors = placed.length ? placed : artboards;
+      return {
+        group,
+        count: artboards.length,
+        x: Math.min(...anchors.map((artboard) => artboard.position.x)),
+        y: Math.min(...anchors.map((artboard) => artboard.position.y)) - GROUP_HEADER_HEIGHT,
+      };
+    });
+  }
+
+  function renderGroupHeaders(documentState, focusGroup) {
+    const rendered = new Set();
+    documentState.projects.forEach((project) => {
+      if (project.collapsed) return;
+      getGroupHeaders(documentState, project.id).forEach((header) => {
+        const key = `${project.id}\u0000${header.group}`;
+        let el = groupHeaderEls.get(key);
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'canvas-group-header';
+          el.dataset.group = header.group;
+          groupHeaderEls.set(key, el);
+        }
+        el.textContent = `${header.group} · ${header.count}`;
+        el.style.left = `${header.x}px`;
+        el.style.top = `${header.y}px`;
+        el.style.display = focusGroup !== null && focusGroup !== header.group ? 'none' : '';
+        if (!el.parentNode) world.appendChild(el);
+        rendered.add(key);
+      });
+    });
+    groupHeaderEls.forEach((el, key) => {
+      if (rendered.has(key)) return;
+      el.remove();
+      groupHeaderEls.delete(key);
+    });
+  }
+
   function getProjectToggleAnchor(documentState, projectId, projectIndex) {
     const ids = getProjectVisibleArtboardIds(documentState, projectId);
     if (!ids.length) {
@@ -396,7 +448,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     });
     return {
       x: Number.isFinite(minX) ? minX : ARTBOARD_BASE_X,
-      y: Number.isFinite(minY) ? Math.max(0, minY - 28) : ARTBOARD_BASE_Y + projectIndex * 28,
+      y: Number.isFinite(minY) ? Math.max(0, minY - 28 - (getGroupHeaders(documentState, projectId).length ? GROUP_HEADER_HEIGHT : 0)) : ARTBOARD_BASE_Y + projectIndex * 28,
     };
   }
 
@@ -540,6 +592,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         documentStore.mutate((draft) => {
           if (!draft.artboards[id]) return;
           draft.artboards[id].position = { x: snappedX, y: snappedY };
+          draft.artboards[id].moved = true;
+          layoutPages(draft, registry);
         });
       };
 
@@ -637,6 +691,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
         renderedIds.add(id);
       });
     });
+
+    renderGroupHeaders(documentState, focusGroup);
 
     cards.forEach((entry, id) => {
       if (!renderedIds.has(id)) {

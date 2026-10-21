@@ -304,7 +304,7 @@ export function createViewport({
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
 
-  setTimeout(() => documentStore.resolveOverlaps(), 200);
+  setTimeout(() => documentStore.relayout(activeRegistry), 200);
 
   function updateRegistry(nextRegistry, { changedIds } = {}) {
     if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');

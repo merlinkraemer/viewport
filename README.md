@@ -60,6 +60,7 @@ Every artboard exports `meta` and a default `render()` that returns one DOM elem
 | `layer` | one of the configured layers (`primitive`, `module`, `composite`) |
 | `page` | page the card lives on; defaults to the top-level folder under `artboards/` |
 | `group` | sidebar group inside the page; defaults to the artboard's folder |
+| `order` | optional number; sorts the card before unordered ones in its group |
 | `id` | optional id override; defaults to the file path |
 
 ## Feedback by id
@@ -81,6 +82,10 @@ The sidebar is one tree: page → group → artboard, every node collapsed until
 ## Groups
 
 Inside a page, the tree lists its groups when there is more than one: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Pages and groups show their artboard count. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard to zoom to it. The chevron folds a group.
+
+## Layout
+
+Each page lays itself out: groups stack top to bottom under a header, cards sit left-aligned in rows with even gaps, and a wide card gets a row of its own. Inside a group the order is `meta.order`, then file order. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
 
 ## Review build
 
