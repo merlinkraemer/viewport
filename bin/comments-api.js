@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 export const COMMENTS_ROUTE = '/__viewport/comments';
-export const REVIEWED_ROUTE = '/__viewport/reviewed';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TEXT_LENGTH = 10000;
 
@@ -100,16 +99,6 @@ function updateComment(data, body) {
   return comment;
 }
 
-function markReviewed(data, body) {
-  const keys = Array.isArray(body.keys) ? body.keys.filter((key) => typeof key === 'string' && key.trim()) : [];
-  if (!keys.length) throw new HttpError(400, 'keys must be a non-empty array of artboard or variation ids');
-  const mark = { at: new Date().toISOString(), done: body.done !== false };
-  keys.forEach((key) => {
-    data[key] = mark;
-  });
-  return mark;
-}
-
 function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -117,12 +106,7 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-export function reviewedPathFor(commentsPath) {
-  return path.join(path.dirname(commentsPath), 'reviewed.json');
-}
-
 export function createCommentsMiddleware(commentsPath) {
-  const reviewedPath = reviewedPathFor(commentsPath);
   let queue = Promise.resolve();
   const serialized = (task) => {
     const run = queue.then(task, task);
@@ -146,31 +130,14 @@ export function createCommentsMiddleware(commentsPath) {
     sendJson(res, req.method === 'POST' ? 201 : 200, comment);
   }
 
-  async function handleReviewed(req, res) {
-    if (req.method === 'GET') {
-      sendJson(res, 200, await readJsonObject(reviewedPath));
-      return;
-    }
-    if (req.method !== 'POST') throw new HttpError(405, 'Use GET or POST');
-    const body = await readBody(req);
-    const mark = await serialized(async () => {
-      const data = await readJsonObject(reviewedPath);
-      const changed = markReviewed(data, body);
-      await writeJsonObject(reviewedPath, data);
-      return changed;
-    });
-    sendJson(res, 200, mark);
-  }
-
   return async (req, res, next) => {
     const route = (req.url || '').split('?')[0];
-    const handler = route.endsWith(COMMENTS_ROUTE) ? handleComments : route.endsWith(REVIEWED_ROUTE) ? handleReviewed : null;
-    if (!handler) {
+    if (!route.endsWith(COMMENTS_ROUTE)) {
       next();
       return;
     }
     try {
-      await handler(req, res);
+      await handleComments(req, res);
     } catch (err) {
       sendJson(res, err.status || 500, { error: err.message });
     }

@@ -31,7 +31,7 @@ function submitOnModEnter(textarea, submit) {
   });
 }
 
-export function createCommentThread(store, { onOpen, onClose } = {}) {
+export function createCommentThread(store, { onClose } = {}) {
   let panel = null;
   let titleEl = null;
   let listEl = null;
@@ -221,7 +221,6 @@ export function createCommentThread(store, { onOpen, onClose } = {}) {
     close();
     artboardId = id;
     anchor = anchorEl;
-    onOpen?.(id);
     build();
     render();
     document.addEventListener('pointerdown', onOutside, true);

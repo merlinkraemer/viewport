@@ -1,5 +1,4 @@
 const COMMENTS_ENDPOINT = '__viewport/comments';
-const REVIEWED_ENDPOINT = '__viewport/reviewed';
 
 async function request(endpoint, method, body) {
   const res = await fetch(endpoint, {
@@ -15,19 +14,14 @@ async function request(endpoint, method, body) {
   return payload;
 }
 
-function latest(times) {
-  return times.filter(Boolean).sort().at(-1) ?? null;
-}
-
 export function createCommentsStore({ onChange }) {
   let data = {};
-  let marks = {};
   let available = false;
   let error = null;
 
   async function load() {
     try {
-      [data, marks] = await Promise.all([request(COMMENTS_ENDPOINT, 'GET'), request(REVIEWED_ENDPOINT, 'GET')]);
+      data = await request(COMMENTS_ENDPOINT, 'GET');
       available = true;
       error = null;
     } catch (err) {
@@ -49,19 +43,6 @@ export function createCommentsStore({ onChange }) {
     return Array.isArray(data[key]) ? data[key] : [];
   }
 
-  function isReviewed(key) {
-    const mark = marks[key];
-    const comments = list(key);
-    const mine = latest([mark?.done ? mark.at : null, ...comments.filter((c) => !c.by).map((c) => c.at)]);
-    const since = latest([mark && !mark.done ? mark.at : null, ...comments.filter((c) => c.by).map((c) => c.at)]);
-    return Boolean(mine) && (!since || mine > since);
-  }
-
-  function hasReviewData(artboardId) {
-    const variantPrefix = `${artboardId}#`;
-    return [...Object.keys(marks), ...Object.keys(data)].some((key) => key === artboardId || key.startsWith(variantPrefix));
-  }
-
   import.meta.hot?.on('viewport:comments', load);
   window.addEventListener('focus', load);
 
@@ -69,12 +50,9 @@ export function createCommentsStore({ onChange }) {
     load,
     list,
     openCount: (key) => list(key).filter((comment) => !comment.resolved).length,
-    isReviewed,
-    hasReviewData,
     isAvailable: () => available,
     error: () => error,
     add: (key, text) => write(COMMENTS_ENDPOINT, 'POST', { artboardId: key, text }),
     update: (key, id, patch) => write(COMMENTS_ENDPOINT, 'PATCH', { artboardId: key, id, ...patch }),
-    setReviewed: (keys, done) => write(REVIEWED_ENDPOINT, 'POST', { keys, done }),
   };
 }

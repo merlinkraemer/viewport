@@ -5,8 +5,8 @@ import { createPinSidebar } from './pin-sidebar.js';
 import { loadInitialDocument, createDocumentStore, clearStoredState } from './document-store.js';
 import { createCommentsStore } from './comments.js';
 import { createCommentThread } from './comment-thread.js';
-import { createVariantBar, variationElements, variationKey } from './review.js';
-import { layoutPages, readingOrder } from './layout.js';
+import { createVariantBar } from './review.js';
+import { readingOrder } from './layout.js';
 import { copyText } from './dom.js';
 
 export { setEngineConfig };
@@ -127,102 +127,18 @@ function mountViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
-  let showReviewed = bootstrapDoc.ui.showReviewed === true;
-  let openThreadKey = null;
-  let hiddenSignature = '';
-  const probedVariants = new Map();
-
   const comments = createCommentsStore({
     onChange() {
       commentThread.refresh();
       variantBar.refresh();
-      syncReview();
+      canvas.refreshComments();
+      sidebar.render(buildSidebarModel(documentStore.get()));
     },
   });
 
-  function variantKeys(id) {
-    const body = canvas.cardBody(id);
-    if (body) return variationElements(body).map((el) => variationKey(id, el));
-    if (!probedVariants.has(id)) {
-      let keys = [];
-      try {
-        const node = activeRegistry.find((entry) => entry.id === id)?.render();
-        if (node) keys = variationElements(node).map((el) => variationKey(id, el));
-      } catch (err) {
-        console.warn(`viewport: could not render ${id} to list its variations`, err);
-      }
-      probedVariants.set(id, keys);
-    }
-    return probedVariants.get(id);
-  }
-
-  function isArtboardReviewed(id) {
-    const keys = variantKeys(id);
-    return keys.length ? keys.every(comments.isReviewed) : comments.isReviewed(id);
-  }
-
-  function isHidden(id) {
-    if (showReviewed || !comments.hasReviewData(id)) return false;
-    if (openThreadKey === id || openThreadKey?.startsWith(`${id}#`)) return false;
-    return isArtboardReviewed(id);
-  }
-
-  function visibleRegistry() {
-    return activeRegistry.filter((entry) => !isHidden(entry.id));
-  }
-
-  function decorateCard(id, card) {
-    card.setReviewed(comments.hasReviewData(id) && isArtboardReviewed(id));
-    variationElements(card.bodyEl).forEach((el) => {
-      const key = variationKey(id, el);
-      el.classList.toggle('vp-variant--hidden', !showReviewed && key !== openThreadKey && comments.isReviewed(key));
-    });
-  }
-
-  function syncReview() {
-    const visible = visibleRegistry();
-    const signature = visible.map((entry) => entry.id).join('\n');
-    canvas.refreshComments();
-    if (signature !== hiddenSignature) {
-      hiddenSignature = signature;
-      documentStore.mutate((draft) => {
-        draft.ui.showReviewed = showReviewed;
-        layoutPages(draft, visible);
-      });
-      return;
-    }
-    sidebar.render(buildSidebarModel(documentStore.get()));
-  }
-
-  function saveReviewed(keys, done) {
-    comments.setReviewed(keys, done).catch((err) => canvas.showCopyToast(`Not saved: ${err.message}`));
-  }
-
-  function toggleArtboardDone(id) {
-    saveReviewed([id, ...variantKeys(id)], !isArtboardReviewed(id));
-  }
-
-  function toggleVariantDone(key) {
-    saveReviewed([key], !comments.isReviewed(key));
-  }
-
-  const threadStore = {
-    ...comments,
-    async add(key, text) {
-      await comments.add(key, text);
-      const keys = activeRegistry.some((entry) => entry.id === key) ? variantKeys(key) : [];
-      if (keys.length) await comments.setReviewed(keys, true);
-    },
-  };
-
-  const commentThread = createCommentThread(threadStore, {
-    onOpen(key) {
-      openThreadKey = key;
-    },
+  const commentThread = createCommentThread(comments, {
     onClose() {
-      openThreadKey = null;
       variantBar.unlock();
-      syncReview();
     },
   });
 
@@ -230,7 +146,6 @@ function mountViewport({
     mount,
     comments,
     onOpenComments: (key, anchor) => commentThread.open(key, anchor),
-    onToggleDone: toggleVariantDone,
   });
 
   function openComments(artboardId, anchor) {
@@ -244,9 +159,6 @@ function mountViewport({
     pinSidebar,
     registry: activeRegistry,
     comments,
-    isHidden,
-    decorateCard,
-    onToggleDone: toggleArtboardDone,
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
     onOpenComments: openComments,
     onCameraChange: () => {
@@ -264,11 +176,6 @@ function mountViewport({
         if (!expanded.delete(key)) expanded.add(key);
         draft.ui.expanded = [...expanded];
       });
-    },
-    onToggleShowReviewed() {
-      showReviewed = !showReviewed;
-      hiddenSignature = null;
-      syncReview();
     },
     onNavigateArtboard(artboardId) {
       selectPageOf(artboardId);
@@ -371,7 +278,7 @@ function mountViewport({
     const archivedArtboards = [];
     const activePage = documentState.ui.activePage;
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
-      if (artboard.orphaned || (!artboard.archived && isHidden(id))) return;
+      if (artboard.orphaned) return;
 
       const regEntry = registryById.get(id);
       const layer = regEntry ? regEntry.layer : 'primitive';
@@ -383,7 +290,6 @@ function mountViewport({
         projectId: artboard.projectId,
         pinned: artboard.pinned && !artboard.archived,
         number: numbers.get(id),
-        reviewed: comments.hasReviewData(id) && isArtboardReviewed(id),
         layer,
         page: artboard.page,
         group: artboardGroup(regEntry || { layer }),
@@ -406,7 +312,6 @@ function mountViewport({
       focusGroup: documentState.ui.focusGroup,
       projects: documentState.projects,
       artboardsByProject,
-      showReviewed,
       archivedArtboards,
       ui: documentState.ui,
     };
@@ -421,7 +326,7 @@ function mountViewport({
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
 
-  setTimeout(() => documentStore.relayout(visibleRegistry()), 200);
+  setTimeout(() => documentStore.relayout(activeRegistry), 200);
 
   async function migrateLocalNotes() {
     const notes = (documentStore.get().notes || []).filter((note) => note.text?.trim());
@@ -440,10 +345,9 @@ function mountViewport({
     if (!Array.isArray(nextRegistry)) throw new Error('updateRegistry: `nextRegistry` array is required');
     const idsToRefresh = changedIds || nextRegistry.map((entry) => entry.id);
     activeRegistry.splice(0, activeRegistry.length, ...nextRegistry);
-    idsToRefresh.forEach((id) => probedVariants.delete(id));
     pages = listPages(activeRegistry);
     documentStore.syncRegistry(activeRegistry);
-    documentStore.relayout(visibleRegistry());
+    documentStore.relayout(activeRegistry);
     const page = documentStore.get().ui.activePage;
     if (resolvePage(page) !== page) selectPage(page);
     canvas.refreshArtboards(idsToRefresh);

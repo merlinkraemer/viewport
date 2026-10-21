@@ -77,7 +77,7 @@ An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards
 
 Each card header has a comment button with a count of open comments. It opens a small thread: add a comment (⌘/Ctrl+Enter), edit one, resolve or reopen it. Right-click an artboard in the sidebar for the same thread.
 
-A card can hold several variations: mark each one's outermost element with `data-variant="<name>"`. Hovering a variation outlines it and shows a small bar with its name, a comment button and "done". Its comments and review state are keyed `<artboard id>#<name>`, for example `device-view/slots#V5`, so the key survives a rebuild as long as the name stays. A card with fewer than two named variations is one unit.
+A card can hold several variations: mark each one's outermost element with `data-variant="<name>"`. Hovering a variation outlines it and shows a small bar with its name and a comment button. Its comments are keyed `<artboard id>#<name>`, for example `device-view/slots#V5`, so the key survives a rebuild as long as the name stays. A card with fewer than two named variations is one unit.
 
 Comments live in `viewport/comments.json`, a file the agent reads and edits, keyed by artboard id:
 
@@ -92,11 +92,9 @@ Comments live in `viewport/comments.json`, a file the agent reads and edits, key
 
 Both `npx viewport` and `npx viewport preview` serve `GET`/`POST`/`PATCH` on `__viewport/comments`, so a review build on a phone saves comments too. Each write rereads the file, so edits an agent made in between survive, and replaces it atomically. A file with broken JSON is never overwritten; the server answers 409 until it is fixed. Another static server shows comments read-only. In dev, an agent's edit to the file shows up live. Comments are not part of the build hash. Notes from older versions, kept in the browser, move into the file on the first load with a server.
 
-## Reviewed
+## Review workflow
 
-An artboard or variation counts as reviewed once the user commented on it or clicked "done", and stays reviewed until an agent adds a comment after that (`"by": "agent"`), so a reply brings it back. Reviewed things are hidden on the canvas and in the sidebar; "Show reviewed" in the sidebar footer brings them back, and "done" on a reviewed item unmarks it. "done" on a card marks the card and each of its variations; a card with variations is reviewed when all of them are, so a variation added later shows up on its own.
-
-The marks live in `viewport/reviewed.json`, next to `comments.json`, under the same keys: `{ "<key>": { "at": "<ISO time>", "done": true } }`. Both servers serve `GET` and `POST { keys, done }` on `__viewport/reviewed`, with the same file handling as comments. It is not part of the build hash.
+The user reviews a whole page at once by commenting on its cards and variations. He then tells the agent which page's comments to act on. The next round replaces the commented boards with new versions; the old boards are removed, not kept, and git history keeps them. There are no manual done or reviewed marks, and commented boards stay visible.
 
 ## Pages
 

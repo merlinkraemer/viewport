@@ -27,7 +27,7 @@ function button(className, onClick) {
   return btn;
 }
 
-export function createVariantBar({ mount, comments, onOpenComments, onToggleDone }) {
+export function createVariantBar({ mount, comments, onOpenComments }) {
   const outline = document.createElement('div');
   outline.className = 'variant-outline';
   const bar = document.createElement('div');
@@ -42,9 +42,7 @@ export function createVariantBar({ mount, comments, onOpenComments, onToggleDone
   commentBtn.innerHTML = commentIconHtml;
   const count = document.createElement('span');
   commentBtn.appendChild(count);
-  const doneBtn = button('variant-bar__btn', () => current && onToggleDone(current.key));
-  doneBtn.textContent = '✓ done';
-  bar.append(name, commentBtn, doneBtn);
+  bar.append(name, commentBtn);
   document.body.append(outline, bar);
 
   let current = null;
@@ -65,9 +63,6 @@ export function createVariantBar({ mount, comments, onOpenComments, onToggleDone
     const open = comments.openCount(current.key);
     count.textContent = open ? String(open) : '';
     commentBtn.title = `Comment on ${current.key}`;
-    const reviewed = comments.isReviewed(current.key);
-    doneBtn.classList.toggle('variant-bar__btn--on', reviewed);
-    doneBtn.title = reviewed ? 'Reviewed. Click to mark as not reviewed.' : `Mark ${current.el.dataset.variant} as reviewed`;
   }
 
   function position() {

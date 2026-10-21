@@ -77,14 +77,9 @@ export function createSidebar(options) {
   scroll.className = 'sidebar-scroll';
   sidebar.appendChild(scroll);
 
-  const reviewedToggle = document.createElement('button');
-  reviewedToggle.type = 'button';
-  reviewedToggle.className = 'sidebar-reviewed-toggle';
-  reviewedToggle.addEventListener('click', () => options.onToggleShowReviewed?.());
-
   const footer = document.createElement('div');
   footer.className = 'sidebar-footer';
-  footer.append(reviewedToggle, createBuildLabel(options.build));
+  footer.append(createBuildLabel(options.build));
   sidebar.appendChild(footer);
 
   const resizeHandle = document.createElement('div');
@@ -168,7 +163,6 @@ export function createSidebar(options) {
   function createArtboardRow(artboard, level) {
     const row = createRow('artboard', level, getRowLabel(artboard));
     row.dataset.id = artboard.id;
-    row.classList.toggle('sidebar-row--reviewed', artboard.reviewed);
     row.title = `${getDisplayName(artboard)}\n${artboard.id}`;
     const num = document.createElement('span');
     num.className = 'sidebar-row__num';
@@ -249,7 +243,7 @@ export function createSidebar(options) {
     if (!open) return;
     model.archivedArtboards.forEach((artboard) => {
       const item = createRow('artboard', 1, getDisplayName(artboard));
-      item.classList.add('sidebar-row--reviewed');
+      item.classList.add('sidebar-row--archived');
       item.title = `Restore ${artboard.id}`;
       item.append(item.labelEl);
       item.addEventListener('click', () => options.onRestoreArtboard?.(artboard.id));
@@ -294,7 +288,7 @@ export function createSidebar(options) {
     if (!rows) {
       const empty = document.createElement('div');
       empty.className = 'sidebar-empty';
-      empty.textContent = model.showReviewed ? 'No artboards.' : 'All reviewed.';
+      empty.textContent = 'No artboards.';
       tree.appendChild(empty);
     }
     appendArchive(tree, expanded);
@@ -310,8 +304,6 @@ export function createSidebar(options) {
     const scrollTop = scroll.scrollTop;
     scroll.replaceChildren(buildTree());
     scroll.scrollTop = scrollTop;
-    reviewedToggle.textContent = model.showReviewed ? 'Hide reviewed' : 'Show reviewed';
-    reviewedToggle.setAttribute('aria-pressed', String(Boolean(model.showReviewed)));
     setActiveStyles();
   }
 

@@ -69,7 +69,12 @@ The user comments on cards in the canvas; the comments land in `viewport/comment
 - After acting on one, set `resolved: true`. To answer, append `{ "id": "<unique>", "text": "...", "at": "<ISO time>", "resolved": false, "by": "agent" }` to the same list, for example when you need a decision or want to say what changed.
 - Edit the file as JSON and keep it valid; the servers refuse to write over a broken file. Never delete the user's comments.
 - A key `<artboard id>#<name>` is a comment on one variation inside that card: the element with `data-variant="<name>"`. Give every variation in a multi-variation card a stable `data-variant` name on its outermost element so the user can comment on it alone.
-- `viewport/reviewed.json` holds what the user marked done, under the same keys. Reviewed things are hidden from him until you add an agent comment, so answer on the key when you change something he already reviewed. Don't edit that file.
+
+### Review workflow
+
+- The user reviews a whole page at once by commenting on its cards and variations, then tells you which page's comments to act on.
+- Act on that page's open comments. The next round replaces the commented boards with new versions; delete the old boards, do not keep them. Git history keeps them.
+- Commented boards stay visible. There are no done or reviewed marks.
 
 ## Layers
 

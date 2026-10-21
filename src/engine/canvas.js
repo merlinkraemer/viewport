@@ -56,15 +56,14 @@ function readStoredCamera(page) {
   return null;
 }
 
-export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, isHidden, decorateCard, onToggleDone, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
+export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
   let currentPage;
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
   const groupBandEls = new Map();
   const selectedIds = new Set();
-  const layoutRegistry = () => registry.filter((entry) => !isHidden(entry.id));
-  const relayoutAfterMeasure = debounce(() => documentStore.relayout(layoutRegistry()), MEASURE_SETTLE_MS);
+  const relayoutAfterMeasure = debounce(() => documentStore.relayout(registry), MEASURE_SETTLE_MS);
 
   let leftSidebarWidth = 220;
   let pinSidebarWidth = pinSidebar.getWidth();
@@ -366,7 +365,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const title = artboard ? getDisplayTitle(artboard) : (reg.sourceTitle || reg.id);
     entry.label.textContent = title;
     entry.element.titleEl.textContent = title;
-    decorateCard(id, entry.element);
   }
 
   function getDisplayTitle(artboardState) {
@@ -377,13 +375,13 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     return Object.keys(documentState.artboards)
       .filter((id) => {
         const artboard = documentState.artboards[id];
-        return artboard.projectId === projectId && !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard) && !isHidden(id);
+        return artboard.projectId === projectId && !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard);
       })
       .sort((a, b) => documentState.artboards[a].sidebarOrder - documentState.artboards[b].sidebarOrder);
   }
 
-  function pageGroups(documentState, projectId, entries = layoutRegistry()) {
-    return readingOrder(documentState, entries)
+  function pageGroups(documentState, projectId) {
+    return readingOrder(documentState, registry)
       .filter((group) => group.projectId === projectId && (!documentState.ui.activePage || group.page === documentState.ui.activePage));
   }
 
@@ -460,7 +458,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
   function numberCards(documentState) {
     documentState.projects.forEach((project) => {
-      pageGroups(documentState, project.id, registry).forEach(({ ids }) => {
+      pageGroups(documentState, project.id).forEach(({ ids }) => {
         ids.forEach((id, index) => cards.get(id)?.element.setOrderNumber(index + 1));
       });
     });
@@ -551,11 +549,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       onOpenComments?.(id, entry.element.commentBtn);
     });
 
-    entry.element.doneBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      onToggleDone?.(id);
-    });
-
     entry.pinBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       documentStore.mutate((draft) => {
@@ -640,7 +633,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
           if (!draft.artboards[id]) return;
           draft.artboards[id].position = { x: snappedX, y: snappedY };
           draft.artboards[id].moved = true;
-          layoutPages(draft, layoutRegistry());
+          layoutPages(draft, registry);
         });
       };
 
@@ -726,7 +719,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
         cardEntry.renameBtn.hidden = false;
         cardEntry.element.setCommentCount(comments.openCount(id), comments.list(id).length);
-        decorateCard(id, cardEntry.element);
 
         cardEntry.element.style.left = `${state.position.x}px`;
         cardEntry.element.style.top = `${state.position.y}px`;
@@ -972,10 +964,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }, 0);
 
   function refreshComments() {
-    cards.forEach((entry, id) => {
-      entry.element.setCommentCount(comments.openCount(id), comments.list(id).length);
-      decorateCard(id, entry.element);
-    });
+    cards.forEach((entry, id) => entry.element.setCommentCount(comments.openCount(id), comments.list(id).length));
   }
 
   return {
@@ -983,7 +972,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     refreshComments,
     centerOn,
     fitGroup,
-    cardBody: (id) => cards.get(id)?.bodyEl ?? null,
     navigateToCanvasNode,
     showCopyToast,
     copyIds,

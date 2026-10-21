@@ -95,7 +95,6 @@ function normalizeUi(ui) {
     focusGroup: typeof ui?.focusGroup === 'string' && ui.focusGroup ? ui.focusGroup : null,
     activePage: typeof ui?.activePage === 'string' && ui.activePage ? ui.activePage : null,
     expanded: Array.isArray(ui?.expanded) ? [...new Set(ui.expanded.filter((key) => typeof key === 'string'))] : [],
-    showReviewed: ui?.showReviewed === true,
     layoutVersion: Number.isFinite(ui?.layoutVersion) ? ui.layoutVersion : DEFAULT_UI.layoutVersion,
   };
 }

@@ -56,11 +56,3 @@
 .variant-bar__btn:focus-visible {
   outline: 1px solid var(--ff-border-hi);
 }
-
-.variant-bar__btn--on {
-  color: var(--ff-text);
-}
-
-.vp-variant--hidden {
-  display: none !important;
-}
