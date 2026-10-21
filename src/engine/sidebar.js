@@ -25,39 +25,6 @@ const noteIconHtml = `
   </svg>
 `;
 
-function makeListReorderable(listContainer, onReorder) {
-  let draggedItem = null;
-
-  listContainer.addEventListener('dragstart', (event) => {
-    const item = event.target.closest('.sidebar-item--artboard');
-    if (!item) return;
-    draggedItem = item;
-    draggedItem.classList.add('sidebar-item--dragging');
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', item.dataset.id);
-  });
-
-  listContainer.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    if (!draggedItem) return;
-    const target = event.target.closest('.sidebar-item--artboard');
-    if (!target || target === draggedItem) return;
-
-    const rect = target.getBoundingClientRect();
-    const placeAfter = event.clientY - rect.top > rect.height / 2;
-    listContainer.insertBefore(draggedItem, placeAfter ? target.nextSibling : target);
-  });
-
-  listContainer.addEventListener('dragend', () => {
-    if (!draggedItem) return;
-    draggedItem.classList.remove('sidebar-item--dragging');
-    draggedItem = null;
-    const ids = Array.from(listContainer.querySelectorAll('.sidebar-item--artboard'))
-      .map((item) => item.dataset.id);
-    onReorder(ids);
-  });
-}
-
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
@@ -118,6 +85,7 @@ export function createSidebar(options) {
   let model = null;
   let activeArtboardId = null;
   let archiveCollapsed = true;
+  let openCommentsCollapsed = false;
 
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'sidebar-resize';
@@ -213,7 +181,6 @@ export function createSidebar(options) {
     row.className = 'sidebar-item sidebar-item--artboard';
     row.dataset.id = artboard.id;
     row.dataset.projectId = project.id;
-    row.draggable = true;
 
     const body = document.createElement('button');
     body.type = 'button';
@@ -225,6 +192,12 @@ export function createSidebar(options) {
     const label = document.createElement('span');
     label.className = 'sidebar-item-label';
     label.textContent = getRowLabel(artboard);
+    if (artboard.orderNumber) {
+      const number = document.createElement('span');
+      number.className = 'sidebar-item-number';
+      number.textContent = String(artboard.orderNumber);
+      body.prepend(number);
+    }
     labelWrap.appendChild(label);
     body.appendChild(labelWrap);
     body.title = `${getDisplayName(artboard)}\n${artboard.id}`;
@@ -364,7 +337,6 @@ export function createSidebar(options) {
     artboards.forEach((artboard, index) => {
       list.appendChild(createArtboardRow(artboard, index, project));
     });
-    makeListReorderable(list, (ids) => options.onReorderProjectArtboards?.(project.id, ids));
     container.appendChild(list);
   }
 
@@ -465,6 +437,47 @@ export function createSidebar(options) {
     return section;
   }
 
+  function buildOpenCommentsSection() {
+    const section = document.createElement('section');
+    section.className = 'sidebar-section sidebar-section--open-comments';
+    section.appendChild(createSectionHeaderButton('Open comments', openCommentsCollapsed, () => {
+      openCommentsCollapsed = !openCommentsCollapsed;
+      render(model);
+    }, String(model.openComments.length)));
+
+    const list = document.createElement('div');
+    list.className = 'sidebar-open-comments';
+    list.hidden = openCommentsCollapsed;
+    section.appendChild(list);
+
+    if (!model.openComments.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sidebar-open-comments-empty';
+      empty.textContent = 'None on this page';
+      list.appendChild(empty);
+    }
+
+    model.openComments.forEach((row) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'sidebar-open-comment';
+      item.dataset.id = row.id;
+      item.title = `${row.id}\n${row.text}`;
+
+      const where = document.createElement('span');
+      where.className = 'sidebar-open-comment-where';
+      where.textContent = `${row.groupLabel} ${row.number} · ${row.title}${row.count > 1 ? ` (${row.count})` : ''}`;
+      const text = document.createElement('span');
+      text.className = 'sidebar-open-comment-text';
+      text.textContent = row.text;
+      item.append(where, text);
+      item.addEventListener('click', () => options.onOpenComments?.(row.id));
+      list.appendChild(item);
+    });
+
+    return section;
+  }
+
   function buildArchiveSection() {
     const section = document.createElement('section');
     section.className = 'sidebar-section sidebar-section--archive';
@@ -514,6 +527,7 @@ export function createSidebar(options) {
     stickyBottom.innerHTML = '';
 
     scroll.appendChild(buildProjectsSection());
+    stickyBottom.appendChild(buildOpenCommentsSection());
     stickyBottom.appendChild(buildArchiveSection());
     setActiveStyles();
   }

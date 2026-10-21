@@ -35,7 +35,9 @@ export default function render() {
 - `render()` returns one DOM element.
 - `meta.layer` is one of the configured layers (`primitive`, `module`, `composite` by default).
 - **One page per focus area.** Each top-level folder under `artboards/` is a page (`artboards/checkout/…` is the page `checkout`); `meta.page` overrides it. Only the selected page is mounted, so pages keep a big project fast; never put every area on one page. Link the user to a page with its hash: `http://<host>:<port>/#checkout`.
-- `meta.group` puts the card in a sidebar group inside its page. Without it, the folder under `artboards/` is the group. Use groups to separate what the user should look at now from everything else; the user clicks a group name to see only that group.
+- `meta.group` puts the card in a group inside its page. Without it, the folder under `artboards/` is the group. Each group is one headed band on the canvas; the user clicks a group name in the sidebar to see only that group.
+- `meta.order` sets the reading order inside the group (and the group's place on the page: the group with the lowest order comes first). Cards without it follow in file order.
+- `meta.question` on a group's first card is the group's one-line decision question, shown in its band header.
 - `meta.id` overrides the id. Avoid it unless a file must move without breaking its id.
 - `#design-system/...` resolves to `viewport/design-system/` from any folder depth.
 
@@ -47,9 +49,22 @@ Every card shows its id; clicking the card title or the id copies it, shift-clic
 
 If no file matches, the id came from `meta.id`: `grep -rn "id: 'checkout-b'" viewport/artboards`. Feedback such as "checkout/option-b: tighter rows" refers to exactly that file. Name files so ids read well (`option-a`, not `v3-final`).
 
+## Lay boards out for review
+
+The user reviews a page by stepping through it in order (→ / J next, ← / K back, C to comment) and comments only on what he likes or what does not work. Lay every page out so that walk is quick:
+
+- **One group per question.** A group holds the cards that answer one decision, nothing else. Reference or locked boards go in their own group, not between options.
+- **Order on purpose, and say which way.** Inside a group, order from the recommendation to the most experimental, or along one axis (size, density, current → A → B → C). Set `meta.order` on every card; never rely on file order.
+- **A short `question` per group,** on its first card, one line with the rec: `'Which knob is the default? Rec k01 Utility arc'`.
+- **Comparable cards are comparable.** Variations of one thing share a size so they sit side by side at the same scale.
+- **No scattered boards.** Do not set positions by hand or rely on dragged cards; the layout is the reading order.
+- **Old rounds off the page.** Only the current round is on a page; decided rounds leave `viewport/` (git keeps them).
+
+The canvas numbers the cards 1, 2, 3 … in each group. A group runs as one left-to-right row that wraps at 2400 px; if its widest card is 1200 px or wider, or more than three times the narrowest, it runs as a single column instead.
+
 ## Comments
 
-The user comments on cards in the canvas; the comments land in `viewport/comments.json`, keyed by artboard id: `{ id, text, at, resolved }`. Read it at the start of each iteration.
+The user comments on cards in the canvas (C on the current card, or the comment button); cards with comments show a filled number, and the sidebar lists the page's open comments. The comments land in `viewport/comments.json`, keyed by artboard id: `{ id, text, at, resolved }`. Read it at the start of each iteration.
 
 - Open comments (`resolved: false`) are feedback on that card's file (the id maps to the file as above).
 - After acting on one, set `resolved: true`. To answer, append `{ "id": "<unique>", "text": "...", "at": "<ISO time>", "resolved": false, "by": "agent" }` to the same list, for example when you need a decision or want to say what changed.
