@@ -175,6 +175,35 @@
   background: var(--ff-accent-hi);
 }
 
+.ff-card__done {
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 var(--ff-space-2);
+  border: none;
+  border-radius: var(--ff-radius-xs);
+  background: transparent;
+  color: var(--ff-faint);
+  font-family: var(--ff-font-mono);
+  font-size: var(--ff-type-label-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--ff-motion-fast), background var(--ff-motion-fast);
+}
+
+.ff-card:hover .ff-card__done,
+.ff-card__done:focus-visible,
+.ff-card__done--on {
+  opacity: 1;
+}
+
+.ff-card__done:hover {
+  background: var(--ff-hover);
+}
+
+.ff-card__done--on {
+  color: var(--ff-text-mid);
+}
+
 .ff-card__order {
   flex-shrink: 0;
   min-width: 22px;
