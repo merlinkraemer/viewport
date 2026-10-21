@@ -31,7 +31,7 @@ function submitOnModEnter(textarea, submit) {
   });
 }
 
-export function createCommentThread(store) {
+export function createCommentThread(store, { onOpen, onClose } = {}) {
   let panel = null;
   let titleEl = null;
   let listEl = null;
@@ -163,6 +163,7 @@ export function createCommentThread(store) {
   }
 
   function close() {
+    const wasOpen = Boolean(panel);
     panel?.remove();
     panel = null;
     artboardId = null;
@@ -171,6 +172,7 @@ export function createCommentThread(store) {
     errorText = '';
     document.removeEventListener('pointerdown', onOutside, true);
     document.removeEventListener('keydown', onKey);
+    if (wasOpen) onClose?.();
   }
 
   function build() {
@@ -219,6 +221,7 @@ export function createCommentThread(store) {
     close();
     artboardId = id;
     anchor = anchorEl;
+    onOpen?.(id);
     build();
     render();
     document.addEventListener('pointerdown', onOutside, true);

@@ -1,3 +1,5 @@
+import './sidebar-context-menu.css';
+
 let activeMenu = null;
 let activeDialog = null;
 

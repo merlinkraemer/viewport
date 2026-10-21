@@ -41,6 +41,8 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
   commentBtn.appendChild(commentCount);
   commentBtn.title = 'Comments';
 
+  const doneBtn = el('button', { class: 'ff-card__done', type: 'button', text: '✓ done' });
+
   const titleRow = el('div', { class: 'ff-card__title-row' }, [
     orderEl,
     titleEl,
@@ -50,7 +52,7 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
 
   const header = el('div', { class: 'ff-card__header' }, [
     titleRow,
-    el('div', { class: 'ff-card__meta' }, [commentBtn, idBtn, dims]),
+    el('div', { class: 'ff-card__meta' }, [doneBtn, commentBtn, idBtn, dims]),
   ]);
   const body = el('div', { class: 'ff-card__body' }, [contentEl]);
   const card = el('div', { class: 'ff-card', dataset: { layer } }, [header, body]);
@@ -73,6 +75,13 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
     commentBtn.classList.toggle('ff-card__comments--any', total > 0);
     commentBtn.title = total ? `Comments: ${open} open of ${total}` : 'Add a comment';
   };
+  card.doneBtn = doneBtn;
+  card.setReviewed = (reviewed) => {
+    doneBtn.classList.toggle('ff-card__done--on', reviewed);
+    doneBtn.setAttribute('aria-pressed', String(reviewed));
+    doneBtn.title = reviewed ? 'Reviewed. Click to mark as not reviewed.' : 'Mark as reviewed';
+  };
+  card.setReviewed(false);
   card.setOrderNumber = (number) => {
     orderEl.textContent = String(number);
     orderEl.hidden = !number;

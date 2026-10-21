@@ -5,58 +5,7 @@ import {
   showRenameDialog,
 } from './sidebar-context-menu.js';
 
-const copyIconHtml = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-  </svg>
-`;
-
-const pinIconHtml = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M12 17v5" />
-    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1z" />
-  </svg>
-`;
-
-const noteIconHtml = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
-`;
-
-function makeListReorderable(listContainer, onReorder) {
-  let draggedItem = null;
-
-  listContainer.addEventListener('dragstart', (event) => {
-    const item = event.target.closest('.sidebar-item--artboard');
-    if (!item) return;
-    draggedItem = item;
-    draggedItem.classList.add('sidebar-item--dragging');
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', item.dataset.id);
-  });
-
-  listContainer.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    if (!draggedItem) return;
-    const target = event.target.closest('.sidebar-item--artboard');
-    if (!target || target === draggedItem) return;
-
-    const rect = target.getBoundingClientRect();
-    const placeAfter = event.clientY - rect.top > rect.height / 2;
-    listContainer.insertBefore(draggedItem, placeAfter ? target.nextSibling : target);
-  });
-
-  listContainer.addEventListener('dragend', () => {
-    if (!draggedItem) return;
-    draggedItem.classList.remove('sidebar-item--dragging');
-    draggedItem = null;
-    const ids = Array.from(listContainer.querySelectorAll('.sidebar-item--artboard'))
-      .map((item) => item.dataset.id);
-    onReorder(ids);
-  });
-}
+const ARCHIVE_NODE_KEY = 'archive';
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -64,15 +13,15 @@ function pad2(value) {
 
 function createBuildLabel(build) {
   const label = document.createElement('span');
-  label.className = 'sidebar-footer-text sidebar-build';
+  label.className = 'sidebar-build';
   if (!build) {
-    label.textContent = 'dev server';
+    label.textContent = 'dev';
     return label;
   }
   const at = new Date(build.builtAt);
   const time = `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
   const sha = `${build.sha ?? 'no-git'}${build.dirty ? '+' : ''}`;
-  label.textContent = `build ${sha} · ${time} · ${build.hash}`;
+  label.textContent = `${sha} · ${time} · ${build.hash}`;
   label.title = `Built ${build.builtAt}. "+" means uncommitted changes. Compare the hash with build.json.`;
   label.dataset.buildHash = build.hash;
   return label;
@@ -94,36 +43,57 @@ function getRowLabel(artboard) {
   return artboard.displayName || artboard.shortTitle || artboard.sourceTitle;
 }
 
+function createRow(kind, level, label) {
+  const row = document.createElement('div');
+  row.className = `sidebar-row sidebar-row--${kind}`;
+  row.style.setProperty('--level', String(level));
+  const labelEl = document.createElement('span');
+  labelEl.className = 'sidebar-row__label';
+  labelEl.textContent = label;
+  labelEl.title = label;
+  row.labelEl = labelEl;
+  return row;
+}
+
+function createChevron(open, onToggle) {
+  const chevron = document.createElement('button');
+  chevron.type = 'button';
+  chevron.className = 'sidebar-row__chevron';
+  chevron.textContent = open ? '▾' : '▸';
+  chevron.setAttribute('aria-label', open ? 'Collapse' : 'Expand');
+  chevron.setAttribute('aria-expanded', String(open));
+  chevron.addEventListener('click', (event) => {
+    event.stopPropagation();
+    onToggle();
+  });
+  return chevron;
+}
+
 export function createSidebar(options) {
   const sidebar = document.createElement('aside');
   sidebar.className = 'artboard-sidebar';
 
-  const content = document.createElement('div');
-  content.className = 'sidebar-content';
-  sidebar.appendChild(content);
-
-  const scroll = document.createElement('div');
+  const scroll = document.createElement('nav');
   scroll.className = 'sidebar-scroll';
-  content.appendChild(scroll);
+  sidebar.appendChild(scroll);
 
-  const stickyBottom = document.createElement('div');
-  stickyBottom.className = 'sidebar-sticky-bottom';
-  content.appendChild(stickyBottom);
+  const reviewedToggle = document.createElement('button');
+  reviewedToggle.type = 'button';
+  reviewedToggle.className = 'sidebar-reviewed-toggle';
+  reviewedToggle.addEventListener('click', () => options.onToggleShowReviewed?.());
 
   const footer = document.createElement('div');
   footer.className = 'sidebar-footer';
-  footer.appendChild(createBuildLabel(options.build));
+  footer.append(reviewedToggle, createBuildLabel(options.build));
   sidebar.appendChild(footer);
-
-  let model = null;
-  let activeArtboardId = null;
-  let archiveCollapsed = true;
 
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'sidebar-resize';
   resizeHandle.setAttribute('aria-hidden', 'true');
   sidebar.appendChild(resizeHandle);
 
+  let model = null;
+  let activeArtboardId = null;
   let sidebarWidth = 220;
   const MIN_WIDTH = 160;
   const MAX_WIDTH = 600;
@@ -143,8 +113,7 @@ export function createSidebar(options) {
 
   resizeHandle.addEventListener('pointermove', (e) => {
     if (!resizing) return;
-    const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX));
-    sidebarWidth = next;
+    sidebarWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX));
     applyWidth();
     options.onWidthChange?.(sidebarWidth);
   });
@@ -152,9 +121,7 @@ export function createSidebar(options) {
   function endResize(e) {
     if (!resizing) return;
     resizing = false;
-    if (resizeHandle.hasPointerCapture(e.pointerId)) {
-      resizeHandle.releasePointerCapture(e.pointerId);
-    }
+    if (resizeHandle.hasPointerCapture(e.pointerId)) resizeHandle.releasePointerCapture(e.pointerId);
     document.body.classList.remove('sidebar-resizing');
   }
 
@@ -162,346 +129,176 @@ export function createSidebar(options) {
   resizeHandle.addEventListener('pointercancel', endResize);
 
   function setActiveStyles() {
-    sidebar.querySelectorAll('.sidebar-item--artboard').forEach((item) => {
-      item.classList.toggle('sidebar-item--active', item.dataset.id === activeArtboardId);
+    scroll.querySelectorAll('.sidebar-row--artboard').forEach((row) => {
+      row.classList.toggle('sidebar-row--active', row.dataset.id === activeArtboardId);
     });
   }
 
-  function createSectionHeaderButton(title, collapsed, onToggle, extraText = '') {
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'sidebar-section-header sidebar-section-header-btn';
-    header.innerHTML = `
-      <span class="sidebar-section-chevron">${collapsed ? '▸' : '▾'}</span>
-      <span class="sidebar-section-title">${title}</span>
-      ${extraText ? `<span class="sidebar-section-count-inline">${extraText}</span>` : ''}
-    `;
-    header.addEventListener('click', onToggle);
-    return header;
+  function artboardMenu(artboard) {
+    return [
+      {
+        label: 'Edit name',
+        onSelect: () => showRenameDialog(getDisplayName(artboard), (value) => options.onRenameArtboard?.(artboard.id, value)),
+      },
+      { label: artboard.pinned ? 'Unpin' : 'Pin', onSelect: () => options.onTogglePin?.(artboard.id) },
+      { label: 'Comments...', onSelect: () => options.onOpenComments?.(artboard.id) },
+      { label: 'Copy id', onSelect: () => options.onCopyArtboard?.(artboard.id) },
+      ...(model.projects.length > 1 ? [{
+        label: 'Move to project...',
+        onSelect: () => showProjectPickerDialog({
+          projects: model.projects,
+          currentProjectId: artboard.projectId,
+          onSelect: (nextProjectId) => options.onMoveArtboardProject?.(artboard.id, nextProjectId),
+        }),
+      }] : []),
+      { type: 'divider' },
+      {
+        label: 'Archive',
+        muted: true,
+        onSelect: () => showConfirmDialog({
+          title: 'Archive artboard',
+          message: `Archive "${getDisplayName(artboard)}"?`,
+          confirmLabel: 'Archive',
+          onConfirm: () => options.onArchiveArtboard?.(artboard.id),
+        }),
+      },
+    ];
   }
 
-  function createSubfolderHeader(title, label, collapsed, count, { onToggle, onFocus, focused }) {
-    const header = document.createElement('div');
-    header.className = 'sidebar-subfolder-header';
-    header.classList.toggle('sidebar-subfolder-header--focused', focused);
-    header.dataset.group = title;
-
-    const chevron = document.createElement('button');
-    chevron.type = 'button';
-    chevron.className = 'sidebar-subfolder-chevron';
-    chevron.textContent = collapsed ? '▸' : '▾';
-    chevron.title = collapsed ? 'Expand' : 'Collapse';
-    chevron.addEventListener('click', onToggle);
-
-    const titleBtn = document.createElement('button');
-    titleBtn.type = 'button';
-    titleBtn.className = 'sidebar-subfolder-title';
-    titleBtn.textContent = label;
-    titleBtn.title = focused ? 'Show all groups' : `Show only ${label}`;
-    titleBtn.addEventListener('click', onFocus);
-
-    const countEl = document.createElement('span');
-    countEl.className = 'sidebar-subfolder-count';
-    countEl.textContent = String(count);
-
-    header.append(chevron, titleBtn, countEl);
-    return header;
-  }
-
-  function createArtboardRow(artboard, index, project) {
-    const row = document.createElement('div');
-    row.className = 'sidebar-item sidebar-item--artboard';
+  function createArtboardRow(artboard, level) {
+    const row = createRow('artboard', level, getRowLabel(artboard));
     row.dataset.id = artboard.id;
-    row.dataset.projectId = project.id;
-    row.draggable = true;
-
-    const body = document.createElement('button');
-    body.type = 'button';
-    body.className = 'sidebar-item-body';
-
-    const labelWrap = document.createElement('span');
-    labelWrap.className = 'sidebar-item-label-wrap';
-
-    const label = document.createElement('span');
-    label.className = 'sidebar-item-label';
-    label.textContent = getRowLabel(artboard);
-    labelWrap.appendChild(label);
-    body.appendChild(labelWrap);
-    body.title = `${getDisplayName(artboard)}\n${artboard.id}`;
-
-    body.addEventListener('click', () => options.onNavigateArtboard?.(artboard.id));
-
-    const actions = document.createElement('div');
-    actions.className = 'sidebar-item-actions';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'sidebar-item-action';
-    copyBtn.innerHTML = copyIconHtml;
-    copyBtn.title = `Copy ${artboard.id} (shift-click: with name and file)`;
-    copyBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      options.onCopyArtboard?.(artboard.id, { extended: event.shiftKey || event.altKey });
-    });
-    actions.appendChild(copyBtn);
-
-    const noteBtn = document.createElement('button');
-    noteBtn.type = 'button';
-    noteBtn.className = 'sidebar-item-action';
-    noteBtn.innerHTML = noteIconHtml;
-    noteBtn.classList.toggle('sidebar-item-action--active', artboard.commentCount > 0);
-    noteBtn.title = artboard.commentCount > 0 ? `Comments (${artboard.commentCount} open)` : 'Comments';
-    noteBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      options.onOpenComments?.(artboard.id);
-    });
-    actions.appendChild(noteBtn);
-
-    const pinBtn = document.createElement('button');
-    pinBtn.type = 'button';
-    pinBtn.className = 'sidebar-item-action';
-    pinBtn.innerHTML = pinIconHtml;
-    pinBtn.classList.toggle('sidebar-item-action--active', artboard.pinned);
-    pinBtn.title = artboard.pinned ? 'Unpin' : 'Pin';
-    pinBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      options.onTogglePin?.(artboard.id);
-    });
-    actions.appendChild(pinBtn);
-
-    row.appendChild(body);
-    row.appendChild(actions);
-
-    row.addEventListener('contextmenu', (event) => {
-      showContextMenu(event, [
-        {
-          label: 'Edit name',
-          onSelect: () => showRenameDialog(getDisplayName(artboard), (value) => options.onRenameArtboard?.(artboard.id, value)),
-        },
-        {
-          label: artboard.pinned ? 'Unpin' : 'Pin',
-          onSelect: () => options.onTogglePin?.(artboard.id),
-        },
-        {
-          label: 'Comments...',
-          onSelect: () => options.onOpenComments?.(artboard.id),
-        },
-        {
-          label: 'Move to project...',
-          onSelect: () => showProjectPickerDialog({
-            projects: model.projects,
-            currentProjectId: artboard.projectId,
-            onSelect: (nextProjectId) => options.onMoveArtboardProject?.(artboard.id, nextProjectId),
-          }),
-        },
-        { type: 'divider' },
-        {
-          label: 'Archive',
-          muted: true,
-          onSelect: () => showConfirmDialog({
-            title: 'Archive artboard',
-            message: `Archive "${getDisplayName(artboard)}"?`,
-            confirmLabel: 'Archive',
-            onConfirm: () => options.onArchiveArtboard?.(artboard.id),
-          }),
-        },
-      ]);
-    });
-
+    row.classList.toggle('sidebar-row--reviewed', artboard.reviewed);
+    row.title = `${getDisplayName(artboard)}\n${artboard.id}`;
+    const num = document.createElement('span');
+    num.className = 'sidebar-row__num';
+    num.textContent = artboard.number ? String(artboard.number) : '';
+    row.append(num, row.labelEl);
+    row.addEventListener('click', () => options.onNavigateArtboard?.(artboard.id));
+    row.addEventListener('contextmenu', (event) => showContextMenu(event, artboardMenu(artboard)));
     return row;
   }
 
-  function createPageRow(page, count, open) {
-    const row = document.createElement('div');
-    row.className = 'sidebar-tree-page';
-    row.classList.toggle('sidebar-tree-page--active', page.id === model.activePage);
+  function createPageRow(page, open) {
+    const row = createRow('page', 0, page.label);
     row.dataset.page = page.id;
-
-    const chevron = document.createElement('button');
-    chevron.type = 'button';
-    chevron.className = 'sidebar-subfolder-chevron';
-    chevron.textContent = open ? '▾' : '▸';
-    chevron.title = open ? 'Collapse' : 'Expand';
-    chevron.addEventListener('click', () => options.onToggleNode?.(pageNodeKey(page.id)));
-
-    const label = document.createElement('a');
-    label.className = 'sidebar-tree-page-label';
-    label.href = `#${page.id}`;
-    label.title = page.label;
-    label.textContent = page.label;
-    label.addEventListener('click', (event) => {
+    row.classList.toggle('sidebar-row--current', page.id === model.activePage);
+    const link = document.createElement('a');
+    link.className = 'sidebar-row__label';
+    link.href = `#${page.id}`;
+    link.textContent = page.label;
+    link.title = page.label;
+    link.addEventListener('click', (event) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
       event.preventDefault();
+    });
+    row.append(createChevron(open, () => options.onToggleNode?.(pageNodeKey(page.id))), link);
+    row.addEventListener('click', (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey) return;
       options.onSelectPage?.(page.id);
     });
+    return row;
+  }
 
-    const countEl = document.createElement('span');
-    countEl.className = 'sidebar-page-count';
-    countEl.textContent = String(count);
-
-    row.append(chevron, label, countEl);
+  function createGroupRow(page, group, level, open, nodeKey) {
+    const row = createRow('group', level, group.label);
+    row.dataset.group = group.name;
+    row.dataset.page = page ?? '';
+    const focused = model.focusGroup === group.name;
+    row.classList.toggle('sidebar-row--active', focused);
+    row.title = focused ? 'Show all groups' : `Show only ${group.label}`;
+    row.append(createChevron(open, () => options.onToggleNode?.(nodeKey)), row.labelEl);
+    row.addEventListener('click', () => options.onFocusGroup?.(group.name, { page, nodeKey }));
     return row;
   }
 
   function groupArtboards(artboards) {
     const groups = new Map();
     artboards.forEach((artboard) => {
-      if (!groups.has(artboard.group)) groups.set(artboard.group, []);
-      groups.get(artboard.group).push(artboard);
+      if (!groups.has(artboard.group)) groups.set(artboard.group, { name: artboard.group, label: artboard.groupLabel, artboards: [] });
+      groups.get(artboard.group).artboards.push(artboard);
     });
     const rank = (name) => {
       const index = model.groupOrder.indexOf(name);
       return index === -1 ? model.groupOrder.length : index;
     };
-    return [...groups.entries()]
-      .sort(([a], [b]) => rank(a) - rank(b))
-      .map(([name, rows]) => ({ name, artboards: rows }));
+    return [...groups.values()].sort((a, b) => rank(a.name) - rank(b.name));
   }
 
-  function appendArtboardList(container, artboards, project) {
-    const list = document.createElement('div');
-    list.className = 'sidebar-subfolder-list';
-    artboards.forEach((artboard, index) => {
-      list.appendChild(createArtboardRow(artboard, index, project));
-    });
-    makeListReorderable(list, (ids) => options.onReorderProjectArtboards?.(project.id, ids));
-    container.appendChild(list);
-  }
-
-  function appendPageChildren(container, page, artboards, project, expanded) {
+  function appendChildren(container, page, artboards, level, expanded) {
     const groups = groupArtboards(artboards);
     if (groups.length < 2) {
-      appendArtboardList(container, artboards, project);
+      artboards.forEach((artboard) => container.appendChild(createArtboardRow(artboard, level)));
       return;
     }
     groups.forEach((group) => {
       const key = groupNodeKey(page, group.name);
       const open = expanded.has(key);
-      const header = createSubfolderHeader(group.name, group.artboards[0].groupLabel, !open, group.artboards.length, {
-        focused: model.focusGroup === group.name,
-        onToggle: () => options.onToggleNode?.(key),
-        onFocus: () => options.onFocusGroup?.(group.name, { page, nodeKey: key }),
-      });
-      header.dataset.page = page ?? '';
-      container.appendChild(header);
-      if (open) appendArtboardList(container, group.artboards, project);
+      container.appendChild(createGroupRow(page, group, level, open, key));
+      if (open) group.artboards.forEach((artboard) => container.appendChild(createArtboardRow(artboard, level + 1)));
     });
   }
 
-  function buildProjectsSection() {
-    const section = document.createElement('section');
-    section.className = 'sidebar-section sidebar-section--projects';
+  function appendArchive(container, expanded) {
+    if (!model.archivedArtboards.length) return;
+    const open = expanded.has(ARCHIVE_NODE_KEY);
+    const row = createRow('archive', 0, 'Archived');
+    row.append(createChevron(open, () => options.onToggleNode?.(ARCHIVE_NODE_KEY)), row.labelEl);
+    row.addEventListener('click', () => options.onToggleNode?.(ARCHIVE_NODE_KEY));
+    container.appendChild(row);
+    if (!open) return;
+    model.archivedArtboards.forEach((artboard) => {
+      const item = createRow('artboard', 1, getDisplayName(artboard));
+      item.classList.add('sidebar-row--reviewed');
+      item.title = `Restore ${artboard.id}`;
+      item.append(item.labelEl);
+      item.addEventListener('click', () => options.onRestoreArtboard?.(artboard.id));
+      container.appendChild(item);
+    });
+  }
+
+  function buildTree() {
+    const tree = document.createDocumentFragment();
     const expanded = new Set(model.ui?.expanded || []);
+    const multiProject = model.projects.length > 1;
+    let rows = 0;
 
     model.projects.forEach((project) => {
-      const projectWrap = document.createElement('div');
-      projectWrap.className = 'sidebar-project';
-      projectWrap.dataset.projectId = project.id;
-
-      const projectHeader = document.createElement('button');
-      projectHeader.type = 'button';
-      projectHeader.className = 'sidebar-project-header sidebar-project-header-btn';
-      projectHeader.addEventListener('click', () => {
-        options.onSelectActiveProject?.(project.id);
-        options.onToggleProjectCollapse?.(project.id);
-      });
-
-      const chevron = document.createElement('span');
-      chevron.className = 'sidebar-project-chevron';
-      chevron.textContent = project.collapsed ? '▸' : '▾';
-      projectHeader.appendChild(chevron);
-
-      const title = document.createElement('span');
-      title.className = 'sidebar-project-title';
-      title.textContent = project.name;
-      title.classList.toggle('sidebar-project-title--active', model.activeProjectId === project.id);
-      projectHeader.appendChild(title);
-
-      projectWrap.appendChild(projectHeader);
-
-      const list = document.createElement('div');
-      list.className = 'sidebar-project-list';
-      list.classList.toggle('sidebar-project-list--collapsed', project.collapsed);
-      projectWrap.appendChild(list);
-
-      const projectArtboards = model.artboardsByProject[project.id] || [];
-
-      if (!project.collapsed) {
-        if (model.focusGroup) {
-          const showAll = document.createElement('button');
-          showAll.type = 'button';
-          showAll.className = 'sidebar-show-all';
-          const focusedRow = projectArtboards.find((artboard) => artboard.group === model.focusGroup);
-          showAll.textContent = `Showing ${focusedRow?.groupLabel ?? model.focusGroup} · show all`;
-          showAll.addEventListener('click', () => options.onFocusGroup?.(model.focusGroup, { page: model.activePage }));
-          list.appendChild(showAll);
-        }
-
-        if (model.pages.length < 2) {
-          appendPageChildren(list, model.pages[0]?.id ?? null, projectArtboards, project, expanded);
-        } else {
-          const byPage = new Map();
-          projectArtboards.forEach((artboard) => {
-            if (!byPage.has(artboard.page)) byPage.set(artboard.page, []);
-            byPage.get(artboard.page).push(artboard);
-          });
-          model.pages.forEach((page) => {
-            const artboards = byPage.get(page.id);
-            if (!artboards) return;
-            const open = expanded.has(pageNodeKey(page.id));
-            list.appendChild(createPageRow(page, artboards.length, open));
-            if (!open) return;
-            const children = document.createElement('div');
-            children.className = 'sidebar-tree-children';
-            appendPageChildren(children, page.id, artboards, project, expanded);
-            list.appendChild(children);
-          });
-        }
+      const artboards = model.artboardsByProject[project.id] || [];
+      if (!artboards.length) return;
+      rows += artboards.length;
+      const level = multiProject ? 1 : 0;
+      if (multiProject) {
+        const header = createRow('page', 0, project.name);
+        header.append(header.labelEl);
+        tree.appendChild(header);
       }
 
-      section.appendChild(projectWrap);
-    });
-
-    return section;
-  }
-
-  function buildArchiveSection() {
-    const section = document.createElement('section');
-    section.className = 'sidebar-section sidebar-section--archive';
-
-    const header = createSectionHeaderButton('Archive', archiveCollapsed, () => {
-      archiveCollapsed = !archiveCollapsed;
-      render(model);
-    }, String(model.archivedArtboards.length));
-    section.appendChild(header);
-
-    const list = document.createElement('div');
-    list.className = 'sidebar-archive-list';
-    list.classList.toggle('sidebar-archive-list--collapsed', archiveCollapsed);
-    section.appendChild(list);
-
-    model.archivedArtboards.forEach((artboard) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'sidebar-item sidebar-item--archived';
-      item.textContent = `${getDisplayName(artboard)} (${artboard.id})`;
-      item.addEventListener('click', () => options.onRestoreArtboard?.(artboard.id));
-      item.addEventListener('contextmenu', (event) => {
-        showContextMenu(event, [
-          {
-            label: 'Edit name',
-            onSelect: () => showRenameDialog(getDisplayName(artboard), (value) => options.onRenameArtboard?.(artboard.id, value)),
-          },
-          {
-            label: 'Restore',
-            onSelect: () => options.onRestoreArtboard?.(artboard.id),
-          },
-        ]);
+      if (model.pages.length < 2) {
+        appendChildren(tree, model.pages[0]?.id ?? null, artboards, level, expanded);
+        return;
+      }
+      model.pages.forEach((page) => {
+        const pageArtboards = artboards.filter((artboard) => artboard.page === page.id);
+        if (!pageArtboards.length) return;
+        const open = expanded.has(pageNodeKey(page.id));
+        tree.appendChild(createPageRow(page, open));
+        if (!open) return;
+        const children = document.createElement('div');
+        children.className = 'sidebar-children';
+        appendChildren(children, page.id, pageArtboards, level + 1, expanded);
+        tree.appendChild(children);
       });
-      list.appendChild(item);
     });
 
-    return section;
+    if (!rows) {
+      const empty = document.createElement('div');
+      empty.className = 'sidebar-empty';
+      empty.textContent = model.showReviewed ? 'No artboards.' : 'All reviewed.';
+      tree.appendChild(empty);
+    }
+    appendArchive(tree, expanded);
+    return tree;
   }
 
   function render(nextModel) {
@@ -510,11 +307,11 @@ export function createSidebar(options) {
       sidebarWidth = model.ui.leftSidebarWidth;
       applyWidth();
     }
-    scroll.innerHTML = '';
-    stickyBottom.innerHTML = '';
-
-    scroll.appendChild(buildProjectsSection());
-    stickyBottom.appendChild(buildArchiveSection());
+    const scrollTop = scroll.scrollTop;
+    scroll.replaceChildren(buildTree());
+    scroll.scrollTop = scrollTop;
+    reviewedToggle.textContent = model.showReviewed ? 'Hide reviewed' : 'Show reviewed';
+    reviewedToggle.setAttribute('aria-pressed', String(Boolean(model.showReviewed)));
     setActiveStyles();
   }
 
