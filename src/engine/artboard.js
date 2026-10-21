@@ -16,6 +16,8 @@ const commentIconHtml = `
 
 export function createArtboard(title, contentEl, { layer = 'primitive', id, file } = {}) {
   const dims = el('span', { class: 'ff-card__dims', text: '' });
+  const orderEl = el('span', { class: 'ff-card__order', text: '' });
+  orderEl.hidden = true;
   const titleEl = el('span', { class: 'ff-card__title', text: title });
   titleEl.title = 'Click to copy id, drag to move. Shift-click to add to the selection.';
 
@@ -40,6 +42,7 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
   commentBtn.title = 'Comments';
 
   const titleRow = el('div', { class: 'ff-card__title-row' }, [
+    orderEl,
     titleEl,
     renameBtn,
     pinBtn,
@@ -69,6 +72,12 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
     commentBtn.classList.toggle('ff-card__comments--open', open > 0);
     commentBtn.classList.toggle('ff-card__comments--any', total > 0);
     commentBtn.title = total ? `Comments: ${open} open of ${total}` : 'Add a comment';
+    card.classList.toggle('ff-card--commented', total > 0);
+    card.classList.toggle('ff-card--open-comments', open > 0);
+  };
+  card.setOrderNumber = (number) => {
+    orderEl.textContent = String(number);
+    orderEl.hidden = !number;
   };
   card.bodyEl = body;
   return card;

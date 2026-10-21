@@ -174,3 +174,38 @@
   color: var(--ff-bg);
   background: var(--ff-accent-hi);
 }
+
+.ff-card__order {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--ff-space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ff-border-hover);
+  border-radius: var(--ff-radius-sm);
+  color: var(--ff-text);
+  font-family: var(--ff-font-mono);
+  font-size: var(--ff-type-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.ff-card--commented .ff-card__order {
+  color: var(--ff-bg);
+  background: var(--ff-accent);
+  border-color: var(--ff-accent);
+}
+
+.ff-card--commented .ff-card__body {
+  border-color: var(--ff-accent);
+}
+
+.ff-card--current .ff-card__body {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: 6px;
+}
+
+.ff-card--current .ff-card__title {
+  color: var(--ff-text);
+}

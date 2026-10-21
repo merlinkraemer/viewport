@@ -7,13 +7,15 @@ import { copyText } from './dom.js';
 import { storageKey, artboardGroup, groupLabel } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
-import { layoutPages, GROUP_HEADER_HEIGHT } from './layout.js';
+import { layoutPages, readingOrder, groupHeaderHeight, BAND_PADDING } from './layout.js';
 
 const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
 const SNAP = 8;
 const CLICK_TRAVEL_PX = 4;
+const REVIEW_MAX_SCALE = 2;
+const FIT_SHARE = 0.8;
 
 const ARTBOARD_BASE_X = 48;
 const ARTBOARD_BASE_Y = 56;
@@ -61,7 +63,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
-  const groupHeaderEls = new Map();
+  const groupBandEls = new Map();
+  let currentReviewId = null;
   const selectedIds = new Set();
   const relayoutAfterMeasure = debounce(() => documentStore.relayout(registry), MEASURE_SETTLE_MS);
 
@@ -380,54 +383,94 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       .sort((a, b) => documentState.artboards[a].sidebarOrder - documentState.artboards[b].sidebarOrder);
   }
 
-  function getGroupHeaders(documentState, projectId) {
-    const groups = new Map();
-    registry.forEach((entry) => {
-      const artboard = documentState.artboards[entry.id];
-      if (!artboard || artboard.projectId !== projectId || artboard.archived || artboard.orphaned) return;
-      if (!onActivePage(documentState, artboard)) return;
-      const group = artboardGroup(entry);
-      if (!groups.has(group)) groups.set(group, []);
-      groups.get(group).push(artboard);
-    });
-    if (groups.size < 2) return [];
-    return [...groups].map(([group, artboards]) => {
+  function pageGroups(documentState, projectId) {
+    return readingOrder(documentState, registry)
+      .filter((group) => group.projectId === projectId && (!documentState.ui.activePage || group.page === documentState.ui.activePage));
+  }
+
+  function cardSize(artboard) {
+    return artboard.size || { width: 320, height: 260 };
+  }
+
+  function getGroupBands(documentState, projectId) {
+    return pageGroups(documentState, projectId).map(({ group, question, ids }) => {
+      const artboards = ids.map((id) => documentState.artboards[id]);
       const placed = artboards.filter((artboard) => !artboard.moved);
       const anchors = placed.length ? placed : artboards;
+      const left = Math.min(...anchors.map((artboard) => artboard.position.x));
+      const top = Math.min(...anchors.map((artboard) => artboard.position.y));
+      const right = Math.max(...anchors.map((artboard) => artboard.position.x + cardSize(artboard).width));
+      const bottom = Math.max(...anchors.map((artboard) => artboard.position.y + cardSize(artboard).height));
+      const headerHeight = groupHeaderHeight(question);
       return {
         group,
-        count: artboards.length,
-        x: Math.min(...anchors.map((artboard) => artboard.position.x)),
-        y: Math.min(...anchors.map((artboard) => artboard.position.y)) - GROUP_HEADER_HEIGHT,
+        question,
+        count: ids.length,
+        commented: ids.filter((id) => comments.list(id).length > 0).length,
+        x: left - BAND_PADDING,
+        y: top - headerHeight - BAND_PADDING,
+        width: right - left + BAND_PADDING * 2,
+        height: bottom - top + headerHeight + BAND_PADDING * 2,
       };
     });
   }
 
-  function renderGroupHeaders(documentState, focusGroup) {
+  function createGroupBand() {
+    const el = document.createElement('div');
+    el.className = 'canvas-group-band';
+    const header = document.createElement('div');
+    header.className = 'canvas-group-band__header';
+    const title = document.createElement('span');
+    title.className = 'canvas-group-band__title';
+    const count = document.createElement('span');
+    count.className = 'canvas-group-band__count';
+    header.append(title, count);
+    const question = document.createElement('div');
+    question.className = 'canvas-group-band__question';
+    el.append(header, question);
+    el.titleEl = title;
+    el.countEl = count;
+    el.questionEl = question;
+    return el;
+  }
+
+  function renderGroupBands(documentState, focusGroup) {
     const rendered = new Set();
     documentState.projects.forEach((project) => {
       if (project.collapsed) return;
-      getGroupHeaders(documentState, project.id).forEach((header) => {
-        const key = `${project.id}\u0000${header.group}`;
-        let el = groupHeaderEls.get(key);
+      getGroupBands(documentState, project.id).forEach((band) => {
+        const key = `${project.id}\u0000${band.group}`;
+        let el = groupBandEls.get(key);
         if (!el) {
-          el = document.createElement('div');
-          el.className = 'canvas-group-header';
-          el.dataset.group = header.group;
-          groupHeaderEls.set(key, el);
+          el = createGroupBand();
+          groupBandEls.set(key, el);
         }
-        el.textContent = `${groupLabel(header.group, documentState.ui.activePage)} · ${header.count}`;
-        el.style.left = `${header.x}px`;
-        el.style.top = `${header.y}px`;
-        el.style.display = focusGroup !== null && focusGroup !== header.group ? 'none' : '';
-        if (!el.parentNode) world.appendChild(el);
+        el.dataset.group = band.group;
+        el.titleEl.textContent = groupLabel(band.group, documentState.ui.activePage);
+        el.countEl.textContent = band.commented ? `${band.count} · ${band.commented} commented` : String(band.count);
+        el.questionEl.textContent = band.question || '';
+        el.questionEl.hidden = !band.question;
+        el.style.left = `${band.x}px`;
+        el.style.top = `${band.y}px`;
+        el.style.width = `${band.width}px`;
+        el.style.height = `${band.height}px`;
+        el.style.display = focusGroup !== null && focusGroup !== band.group ? 'none' : '';
+        if (!el.parentNode) world.prepend(el);
         rendered.add(key);
       });
     });
-    groupHeaderEls.forEach((el, key) => {
+    groupBandEls.forEach((el, key) => {
       if (rendered.has(key)) return;
       el.remove();
-      groupHeaderEls.delete(key);
+      groupBandEls.delete(key);
+    });
+  }
+
+  function numberCards(documentState) {
+    documentState.projects.forEach((project) => {
+      pageGroups(documentState, project.id).forEach(({ ids }) => {
+        ids.forEach((id, index) => cards.get(id)?.element.setOrderNumber(index + 1));
+      });
     });
   }
 
@@ -449,7 +492,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     });
     return {
       x: Number.isFinite(minX) ? minX : ARTBOARD_BASE_X,
-      y: Number.isFinite(minY) ? Math.max(0, minY - 28 - (getGroupHeaders(documentState, projectId).length ? GROUP_HEADER_HEIGHT : 0)) : ARTBOARD_BASE_Y + projectIndex * 28,
+      y: Number.isFinite(minY) ? Math.max(0, Math.min(minY, ...getGroupBands(documentState, projectId).map((band) => band.y)) - 36) : ARTBOARD_BASE_Y + projectIndex * 28,
     };
   }
 
@@ -471,8 +514,9 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       const positions = Object.values(documentState.artboards)
         .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard))
         .map((artboard) => artboard.position);
-      const minX = positions.length ? Math.min(...positions.map((p) => p.x)) : 0;
-      const minY = positions.length ? Math.min(...positions.map((p) => p.y)) : 0;
+      const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
+      const minX = positions.length ? Math.min(...positions.map((p) => p.x), ...bands.map((band) => band.x)) : 0;
+      const minY = positions.length ? Math.min(...positions.map((p) => p.y), ...bands.map((band) => band.y)) : 0;
       stage.scale({ x: 1, y: 1 });
       stage.position({ x: getCanvasInsets().left + ARTBOARD_BASE_X - minX, y: ARTBOARD_BASE_Y - minY });
     }
@@ -699,7 +743,9 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       });
     });
 
-    renderGroupHeaders(documentState, focusGroup);
+    renderGroupBands(documentState, focusGroup);
+    numberCards(documentState);
+    applyCurrent();
 
     cards.forEach((entry, id) => {
       if (!renderedIds.has(id)) {
@@ -788,35 +834,76 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     });
   }
 
+  function viewportBox() {
+    const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
+    const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
+    return { left: leftWidth, width: window.innerWidth - leftWidth - rightWidth, height: window.innerHeight };
+  }
+
+  function fitScaleFor(width, height) {
+    const box = viewportBox();
+    return Math.min((box.width * FIT_SHARE) / width, (box.height * FIT_SHARE) / height);
+  }
+
+  function centerWorldRect(rect, scale) {
+    const box = viewportBox();
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+    const centerX = rect.x + rect.width / 2;
+    const centerY = rect.y + rect.height / 2;
+    animateCanvasTo(newScale, box.left + box.width / 2 - centerX * newScale, box.height / 2 - centerY * newScale);
+  }
+
   function fitClientRect(rect) {
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
-    const worldX = (rect.left - worldRect.left) / scale;
-    const worldY = (rect.top - worldRect.top) / scale;
-    const worldW = rect.width / scale;
-    const worldH = rect.height / scale;
+    const worldBox = {
+      x: (rect.left - worldRect.left) / scale,
+      y: (rect.top - worldRect.top) / scale,
+      width: rect.width / scale,
+      height: rect.height / scale,
+    };
+    centerWorldRect(worldBox, Math.min(rect.maxScale ?? MAX_SCALE, fitScaleFor(worldBox.width, worldBox.height)));
+  }
 
-    const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
-    const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
-    const vpW = window.innerWidth - leftWidth - rightWidth;
-    const vpH = window.innerHeight;
+  function reviewSequence() {
+    const documentState = documentStore.get();
+    const focusGroup = activeFocusGroup(documentState);
+    return documentState.projects
+      .filter((project) => !project.collapsed)
+      .flatMap((project) => pageGroups(documentState, project.id))
+      .filter(({ group }) => focusGroup === null || group === focusGroup)
+      .flatMap(({ group, ids }) => ids
+        .filter((id) => cards.has(id))
+        .map((id, index) => ({ id, group, label: groupLabel(group, documentState.ui.activePage), index, groupIds: ids })));
+  }
 
-    const availW = vpW * 0.8;
-    const availH = vpH * 0.8;
-    const fitScale = Math.min(availW / worldW, availH / worldH);
-    const newScale = Math.max(MIN_SCALE, Math.min(rect.maxScale ?? MAX_SCALE, fitScale));
+  function reviewCard(step) {
+    const documentState = documentStore.get();
+    const artboard = documentState.artboards[step.id];
+    if (!artboard) return;
+    const sizes = step.groupIds.map((id) => cardSize(documentState.artboards[id]));
+    const scale = Math.min(
+      REVIEW_MAX_SCALE,
+      fitScaleFor(Math.max(...sizes.map((size) => size.width)), Math.max(...sizes.map((size) => size.height))),
+    );
+    centerWorldRect({ ...artboard.position, ...cardSize(artboard) }, scale);
+    setCurrent(step.id);
+    onSelectActiveArtboard?.(step.id);
+  }
 
-    const vpCenterX = leftWidth + vpW / 2;
-    const vpCenterY = vpH / 2;
-    const centerX = worldX + worldW / 2;
-    const centerY = worldY + worldH / 2;
+  function applyCurrent() {
+    cards.forEach((entry, id) => entry.element.classList.toggle('ff-card--current', id === currentReviewId));
+  }
 
-    animateCanvasTo(newScale, vpCenterX - centerX * newScale, vpCenterY - centerY * newScale);
+  function setCurrent(id) {
+    currentReviewId = id;
+    applyCurrent();
   }
 
   function centerOn(id) {
     const entry = cards.get(id);
     if (!entry) return;
+    setCurrent(id);
     navigateToCanvasNode(entry.element, id);
   }
 
@@ -930,12 +1017,17 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
   function refreshComments() {
     cards.forEach((entry, id) => entry.element.setCommentCount(comments.openCount(id), comments.list(id).length));
+    renderGroupBands(documentStore.get(), activeFocusGroup(documentStore.get()));
   }
 
   return {
     render,
     refreshComments,
     centerOn,
+    reviewSequence,
+    reviewCard,
+    setCurrent,
+    currentId: () => currentReviewId,
     fitGroup,
     navigateToCanvasNode,
     showCopyToast,

@@ -1,12 +1,19 @@
 import { artboardGroup, sortGroups } from './config.js';
 
 export const LAYOUT_ORIGIN = { x: 48, y: 56 };
-export const GROUP_HEADER_HEIGHT = 40;
+export const BAND_PADDING = 24;
+const HEADER_HEIGHT = 44;
+const QUESTION_HEIGHT = 26;
 const CARD_GAP = 48;
-const GROUP_GAP = 96;
+const GROUP_GAP = 120;
 const ROW_WIDTH = 2400;
 const WIDE_WIDTH = 1200;
+const COLUMN_WIDTH_RATIO = 3;
 const DEFAULT_SIZE = { width: 320, height: 260 };
+
+export function groupHeaderHeight(question) {
+  return HEADER_HEIGHT + (question ? QUESTION_HEIGHT : 0);
+}
 
 function intersects(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -28,24 +35,41 @@ function compareEntries(a, b) {
   return a.index - b.index;
 }
 
-export function pageGroups(entries) {
-  return sortGroups(entries);
+function groupQuestion(items) {
+  const asked = items.find(({ entry }) => typeof entry.question === 'string' && entry.question.trim());
+  return asked ? asked.entry.question.trim() : null;
+}
+
+function orderedGroups(items) {
+  const sorted = items.slice().sort(compareEntries);
+  return sortGroups(items.map(({ entry }) => entry))
+    .map((group) => {
+      const members = sorted.filter(({ entry }) => artboardGroup(entry) === group);
+      return { group, question: groupQuestion(members), items: members };
+    })
+    .filter(({ items: members }) => members.length);
+}
+
+export function usesColumn(sizes) {
+  if (!sizes.length) return false;
+  const widths = sizes.map((size) => size.width);
+  const widest = Math.max(...widths);
+  return widest >= WIDE_WIDTH || widest > Math.min(...widths) * COLUMN_WIDTH_RATIO;
 }
 
 function layoutSet(doc, items) {
   const fixed = items
     .filter(({ id }) => doc.artboards[id].moved)
     .map(({ id }) => padded({ ...doc.artboards[id].position, ...(doc.artboards[id].size || DEFAULT_SIZE) }));
-  const auto = items.filter(({ id }) => !doc.artboards[id].moved).sort(compareEntries);
-  const groups = pageGroups(items.map(({ entry }) => entry));
-  const withHeaders = groups.length > 1;
   const left = LAYOUT_ORIGIN.x;
   let y = LAYOUT_ORIGIN.y;
 
-  groups.forEach((group) => {
-    const cards = auto.filter(({ entry }) => artboardGroup(entry) === group);
+  orderedGroups(items).forEach(({ question, items: members }) => {
+    const cards = members.filter(({ id }) => !doc.artboards[id].moved);
     if (!cards.length) return;
-    if (withHeaders) y += GROUP_HEADER_HEIGHT;
+    y += groupHeaderHeight(question);
+    const sizeOf = (id) => doc.artboards[id].size || DEFAULT_SIZE;
+    const column = usesColumn(cards.map(({ id }) => sizeOf(id)));
     let x = left;
     let rowHeight = 0;
 
@@ -56,9 +80,8 @@ function layoutSet(doc, items) {
     };
 
     cards.forEach(({ id }) => {
-      const size = doc.artboards[id].size || DEFAULT_SIZE;
-      const wide = size.width >= WIDE_WIDTH;
-      if (x > left && (wide || x + size.width > left + ROW_WIDTH)) newRow();
+      const size = sizeOf(id);
+      if (x > left && (column || x + size.width > left + ROW_WIDTH)) newRow();
 
       for (let guard = 0; guard < 1000; guard += 1) {
         const rect = { x, y, ...size };
@@ -71,14 +94,13 @@ function layoutSet(doc, items) {
       doc.artboards[id].position = { x, y };
       rowHeight = Math.max(rowHeight, size.height);
       x += size.width + CARD_GAP;
-      if (wide) newRow();
     });
 
     y += (rowHeight ? rowHeight : -CARD_GAP) + GROUP_GAP;
   });
 }
 
-export function layoutPages(doc, registry) {
+function collectSets(doc, registry) {
   const sets = new Map();
   registry.forEach((entry, index) => {
     const artboard = doc.artboards[entry.id];
@@ -87,6 +109,22 @@ export function layoutPages(doc, registry) {
     if (!sets.has(key)) sets.set(key, []);
     sets.get(key).push({ id: entry.id, entry, index });
   });
-  sets.forEach((items) => layoutSet(doc, items));
+  return sets;
+}
+
+export function layoutPages(doc, registry) {
+  collectSets(doc, registry).forEach((items) => layoutSet(doc, items));
   return doc;
+}
+
+export function readingOrder(doc, registry) {
+  const groups = [];
+  collectSets(doc, registry).forEach((items) => {
+    const page = doc.artboards[items[0].id].page;
+    const projectId = doc.artboards[items[0].id].projectId;
+    orderedGroups(items).forEach(({ group, question, items: members }) => {
+      groups.push({ page, projectId, group, question, ids: members.map(({ id }) => id) });
+    });
+  });
+  return groups;
 }
