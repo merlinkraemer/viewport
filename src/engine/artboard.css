@@ -28,7 +28,6 @@
 }
 
 .ff-card__title {
-  cursor: copy;
   font-size: var(--ff-type-label);
   font-family: var(--ff-font-mono);
   letter-spacing: 0.06em;
@@ -52,7 +51,7 @@
   font-family: var(--ff-font-mono);
   padding: 1px var(--ff-space-2);
   border-radius: var(--ff-radius-xs);
-  cursor: copy;
+  cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

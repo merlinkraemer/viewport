@@ -11,7 +11,7 @@ const pinIconHtml = `
 export function createArtboard(title, contentEl, { layer = 'primitive', id, file } = {}) {
   const dims = el('span', { class: 'ff-card__dims', text: '' });
   const titleEl = el('span', { class: 'ff-card__title', text: title });
-  titleEl.title = 'Click to copy id. Shift-click to add to the selection.';
+  titleEl.title = 'Click to copy id, drag to move. Shift-click to add to the selection.';
 
   const renameBtn = el('button', { class: 'ff-card__rename', text: '✎', type: 'button' });
   renameBtn.setAttribute('aria-label', `Rename "${title}"`);
@@ -24,8 +24,8 @@ export function createArtboard(title, contentEl, { layer = 'primitive', id, file
 
   const idBtn = el('button', { class: 'ff-card__id', type: 'button', text: id });
   idBtn.title = file
-    ? `Copy id (${file}). Shift-click to add to the selection.`
-    : 'Copy id. Shift-click to add to the selection.';
+    ? `Click to copy id (${file}). Shift-click to add to the selection.`
+    : 'Click to copy id. Shift-click to add to the selection.';
 
   const titleRow = el('div', { class: 'ff-card__title-row' }, [
     titleEl,
