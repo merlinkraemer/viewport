@@ -58,7 +58,8 @@ Every artboard exports `meta` and a default `render()` that returns one DOM elem
 |---|---|
 | `title` | card title |
 | `layer` | one of the configured layers (`primitive`, `module`, `composite`) |
-| `group` | sidebar group; defaults to the artboard's folder |
+| `page` | page the card lives on; defaults to the top-level folder under `artboards/` |
+| `group` | sidebar group inside the page; defaults to the artboard's folder |
 | `id` | optional id override; defaults to the file path |
 
 ## Feedback by id
@@ -71,9 +72,15 @@ checkout/option-b  →  viewport/artboards/checkout/option-b.artboard.js
 
 An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards`. The copy button in the sidebar copies the same id; shift-click there adds name and file.
 
+## Pages
+
+A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
+
+The Pages section at the top of the sidebar lists them. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. The page is in the URL hash (`#checkout`), so a link opens that page, and each page keeps its own camera. With a single page the section is hidden and every card is mounted.
+
 ## Groups
 
-The sidebar lists the groups of the active project: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard in the list to zoom to it. The chevron collapses a group.
+Inside a page, the sidebar lists its groups: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard in the list to zoom to it. The chevron collapses a group.
 
 ## Review build
 

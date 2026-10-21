@@ -1,4 +1,4 @@
-import { storageKey, getDefaultProjectName } from './config.js';
+import { storageKey, getDefaultProjectName, pageId } from './config.js';
 
 const DOC_VERSION = 1;
 const DEFAULT_PROJECT_ID = 'default';
@@ -14,6 +14,7 @@ const DEFAULT_UI = {
   pinPanelWidth: 280,
   activeProjectId: DEFAULT_PROJECT_ID,
   focusGroup: null,
+  activePage: null,
   layoutVersion: 1,
 };
 
@@ -94,6 +95,7 @@ function normalizeUi(ui) {
     pinPanelWidth: Number.isFinite(ui?.pinPanelWidth) ? Math.max(220, Math.min(800, ui.pinPanelWidth)) : DEFAULT_UI.pinPanelWidth,
     activeProjectId: typeof ui?.activeProjectId === 'string' && ui.activeProjectId ? ui.activeProjectId : DEFAULT_PROJECT_ID,
     focusGroup: typeof ui?.focusGroup === 'string' && ui.focusGroup ? ui.focusGroup : null,
+    activePage: typeof ui?.activePage === 'string' && ui.activePage ? ui.activePage : null,
     layoutVersion: Number.isFinite(ui?.layoutVersion) ? ui.layoutVersion : DEFAULT_UI.layoutVersion,
   };
 }
@@ -141,6 +143,7 @@ function normalizeArtboard(id, artboard, projectIds) {
     pinned: Boolean(artboard?.pinned),
     sidebarOrder: Number.isFinite(artboard?.sidebarOrder) ? artboard.sidebarOrder : 0,
     orphaned: Boolean(artboard?.orphaned),
+    page: typeof artboard?.page === 'string' && artboard.page ? artboard.page : null,
   };
 }
 
@@ -221,8 +224,8 @@ function getProjectArtboardCount(doc, projectId) {
   return Object.values(doc.artboards).filter((entry) => entry.projectId === projectId).length;
 }
 
-function getAutoPosition(doc, projectId) {
-  const index = getProjectArtboardCount(doc, projectId);
+function getAutoPosition(doc, projectId, page = null) {
+  const index = Object.values(doc.artboards).filter((entry) => entry.projectId === projectId && (entry.page ?? null) === page).length;
   const col = index % 3;
   const row = Math.floor(index / 3);
   return {
@@ -240,17 +243,19 @@ function syncRegistry(doc, registry) {
         sourceTitle: entry.sourceTitle,
         displayName: null,
         projectId,
-        position: getAutoPosition(doc, projectId),
+        position: getAutoPosition(doc, projectId, pageId(entry)),
         size: null,
         archived: false,
         pinned: false,
         sidebarOrder: getProjectArtboardCount(doc, projectId),
         orphaned: false,
+        page: pageId(entry),
       };
       return;
     }
     doc.artboards[entry.id].sourceTitle = entry.sourceTitle;
     doc.artboards[entry.id].orphaned = false;
+    doc.artboards[entry.id].page = pageId(entry);
   });
 
   const registryIds = new Set(registry.map((entry) => entry.id));
@@ -315,12 +320,16 @@ function reflowLegacyDenseGrid(doc, registry) {
 export function resolveAllOverlaps(doc) {
   const GAP = 24;
 
-  doc.projects.forEach((project) => {
-    const ids = Object.keys(doc.artboards).filter((id) => {
-      const artboard = doc.artboards[id];
-      return artboard.projectId === project.id && !artboard.archived && !artboard.orphaned;
-    });
+  const layoutSets = new Map();
+  Object.keys(doc.artboards).forEach((id) => {
+    const artboard = doc.artboards[id];
+    if (artboard.archived || artboard.orphaned) return;
+    const key = `${artboard.projectId}\u0000${artboard.page ?? ''}`;
+    if (!layoutSets.has(key)) layoutSets.set(key, []);
+    layoutSets.get(key).push(id);
+  });
 
+  layoutSets.forEach((ids) => {
     ids.sort((a, b) => {
       const posA = doc.artboards[a].position;
       const posB = doc.artboards[b].position;

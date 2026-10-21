@@ -29,9 +29,13 @@ function debounce(fn, ms) {
 
 const FIRST_MEASURE_SETTLE_MS = 150;
 
-function readStoredCamera() {
+function cameraKey(page) {
+  return storageKey(page ? `camera:${page}` : 'camera');
+}
+
+function readStoredCamera(page) {
   try {
-    const raw = localStorage.getItem(storageKey('camera'));
+    const raw = localStorage.getItem(cameraKey(page));
     const camera = raw ? JSON.parse(raw) : null;
     if (
       camera &&
@@ -52,6 +56,7 @@ function readStoredCamera() {
 }
 
 export function createCanvas({ viewport, documentStore, pinSidebar, registry, onSelectActiveArtboard }) {
+  let currentPage;
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
@@ -159,12 +164,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     draggable: true,
   });
 
-  const storedCamera = readStoredCamera();
-  if (storedCamera) {
-    stage.scale({ x: storedCamera.scale, y: storedCamera.scale });
-    stage.position({ x: storedCamera.x, y: storedCamera.y });
-  }
-
   const bgLayer = new Konva.Layer();
   stage.add(bgLayer);
 
@@ -196,9 +195,9 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
   world.className = 'canvas-world';
   viewport.appendChild(world);
 
-  const persistCamera = debounce(() => {
+  function writeCamera() {
     try {
-      localStorage.setItem(storageKey('camera'), JSON.stringify({
+      localStorage.setItem(cameraKey(currentPage), JSON.stringify({
         x: stage.x(),
         y: stage.y(),
         scale: stage.scaleX(),
@@ -206,7 +205,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     } catch (err) {
       console.error('Failed to persist canvas camera', err);
     }
-  }, 160);
+  }
+  const persistCamera = debounce(writeCamera, 160);
 
   function syncDOM({ persist = true } = {}) {
     const s = stage.scaleX();
@@ -271,6 +271,31 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     }
   }, { passive: false });
 
+  const pendingSizes = new Map();
+  let sizeFlushTimer = null;
+  function flushSizes() {
+    sizeFlushTimer = null;
+    const doc = documentStore.get();
+    const changed = [...pendingSizes].filter(([id, size]) => {
+      const current = doc.artboards[id]?.size;
+      return doc.artboards[id] && (!current || current.width !== size.width || current.height !== size.height);
+    });
+    const firstMeasure = changed.some(([id]) => !doc.artboards[id].size);
+    pendingSizes.clear();
+    if (!changed.length) return;
+    documentStore.mutate((draft) => {
+      changed.forEach(([id, size]) => {
+        if (draft.artboards[id]) draft.artboards[id].size = size;
+      });
+    }, { persist: true });
+    if (firstMeasure) resolveAfterFirstMeasure();
+  }
+
+  function queueSize(id, size) {
+    pendingSizes.set(id, size);
+    sizeFlushTimer ??= setTimeout(flushSizes, 100);
+  }
+
   function ensureCardEntry(id) {
     if (cards.has(id)) return cards.get(id);
 
@@ -282,29 +307,10 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     el.classList.add('module-card--positioned');
     el.dataset.artboardId = id;
 
-    let resizeTimeout = null;
     const ro = new ResizeObserver(() => {
-      const cardW = Math.round(el.offsetWidth);
-      const cardH = Math.round(el.offsetHeight);
-      if (cardW > 0 && cardH > 0) {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          const currentDoc = documentStore.get();
-          const artboard = currentDoc.artboards[id];
-          if (artboard) {
-            const currentSize = artboard.size;
-            if (!currentSize || currentSize.width !== cardW || currentSize.height !== cardH) {
-              const isFirstMeasure = !currentSize;
-              documentStore.mutate((draft) => {
-                if (draft.artboards[id]) {
-                  draft.artboards[id].size = { width: cardW, height: cardH };
-                }
-              }, { persist: true });
-              if (isFirstMeasure) resolveAfterFirstMeasure();
-            }
-          }
-        }, 100);
-      }
+      const width = Math.round(el.offsetWidth);
+      const height = Math.round(el.offsetHeight);
+      if (width > 0 && height > 0) queueSize(id, { width, height });
     });
     ro.observe(el);
 
@@ -346,7 +352,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     return Object.keys(documentState.artboards)
       .filter((id) => {
         const artboard = documentState.artboards[id];
-        return artboard.projectId === projectId && !artboard.archived && !artboard.orphaned;
+        return artboard.projectId === projectId && !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard);
       })
       .sort((a, b) => documentState.artboards[a].sidebarOrder - documentState.artboards[b].sidebarOrder);
   }
@@ -373,10 +379,37 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     };
   }
 
+  function onActivePage(documentState, artboard) {
+    const page = documentState.ui.activePage;
+    return !page || artboard.page === page;
+  }
+
+  function showPage(documentState) {
+    const page = documentState.ui.activePage;
+    if (page === currentPage) return;
+    if (currentPage !== undefined) writeCamera();
+    currentPage = page;
+    const stored = readStoredCamera(page);
+    if (stored) {
+      stage.scale({ x: stored.scale, y: stored.scale });
+      stage.position({ x: stored.x, y: stored.y });
+    } else {
+      const positions = Object.values(documentState.artboards)
+        .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard))
+        .map((artboard) => artboard.position);
+      const minX = positions.length ? Math.min(...positions.map((p) => p.x)) : 0;
+      const minY = positions.length ? Math.min(...positions.map((p) => p.y)) : 0;
+      stage.scale({ x: 1, y: 1 });
+      stage.position({ x: getCanvasInsets().left + ARTBOARD_BASE_X - minX, y: ARTBOARD_BASE_Y - minY });
+    }
+    stage.batchDraw();
+    syncDOM({ persist: false });
+  }
+
   function getSinglePinnedId(documentState) {
     const pinned = Object.keys(documentState.artboards).find((id) => {
       const entry = documentState.artboards[id];
-      return entry.pinned && !entry.archived;
+      return entry.pinned && !entry.archived && onActivePage(documentState, entry);
     });
     return pinned || null;
   }
@@ -801,6 +834,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     const sidebarEl = document.getElementById('sidebar');
     sidebarEl?.classList.toggle('artboard-sidebar--hidden', !leftSidebarOpen);
 
+    showPage(nextDocument);
     renderProjectFrames(nextDocument);
     applyPinSidebar(nextDocument);
     applyCanvasLayout();

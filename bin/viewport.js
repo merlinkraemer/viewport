@@ -152,6 +152,7 @@ function registryEntry(path, mod) {
   return {
     id,
     file,
+    page: mod.meta?.page ?? (file.includes('/') ? file.slice(0, file.indexOf('/')) : null),
     group: mod.meta?.group ?? folder,
     sourceTitle: mod.meta?.title ?? id,
     layer: mod.meta?.layer ?? 'primitive',
