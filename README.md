@@ -102,7 +102,7 @@ Inside a page, the tree lists its groups when there is more than one: `meta.grou
 
 ## Layout
 
-Each page lays itself out for review. Groups stack top to bottom, each in one band headed by its title and card count. Inside a group the order is `meta.order`, then file order, and every card shows its number (1, 2, 3 …). The cards run as one left-to-right row, top-aligned with even gaps, that wraps at 2400 px. A group whose widest card is 1200 px or wider, or more than three times its narrowest, runs as a single column instead. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
+Each page lays itself out for review. Groups stack top to bottom, each in one band headed by its title and card count. Inside a group the order is `meta.order`, then file order, and every card shows its number (1, 2, 3 …). The cards run as one left-to-right row, top-aligned with even gaps, that never wraps. A group is one decision: its cards are the variations, left to right; different element types or questions are separate groups, top to bottom. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
 
 ## Review build
 

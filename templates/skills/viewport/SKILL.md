@@ -59,7 +59,7 @@ The user reviews a page by going through its cards in order and commenting only 
 - **No scattered boards.** Do not set positions by hand or rely on dragged cards; the layout is the reading order.
 - **Old rounds off the page.** Only the current round is on a page; decided rounds leave `viewport/` (git keeps them).
 
-The canvas numbers the cards 1, 2, 3 … in each group. A group runs as one left-to-right row that wraps at 2400 px; if its widest card is 1200 px or wider, or more than three times the narrowest, it runs as a single column instead.
+A group is one decision: its cards are the variations of one element, left to right in one row that never wraps. Different element types or questions are separate groups, stacked top to bottom. The canvas numbers the cards 1, 2, 3 … in each group.
 
 ## Comments
 
