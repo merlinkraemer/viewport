@@ -15,6 +15,7 @@ const DEFAULT_UI = {
   activeProjectId: DEFAULT_PROJECT_ID,
   focusGroup: null,
   activePage: null,
+  expanded: [],
   layoutVersion: 1,
 };
 
@@ -96,6 +97,7 @@ function normalizeUi(ui) {
     activeProjectId: typeof ui?.activeProjectId === 'string' && ui.activeProjectId ? ui.activeProjectId : DEFAULT_PROJECT_ID,
     focusGroup: typeof ui?.focusGroup === 'string' && ui.focusGroup ? ui.focusGroup : null,
     activePage: typeof ui?.activePage === 'string' && ui.activePage ? ui.activePage : null,
+    expanded: Array.isArray(ui?.expanded) ? [...new Set(ui.expanded.filter((key) => typeof key === 'string'))] : [],
     layoutVersion: Number.isFinite(ui?.layoutVersion) ? ui.layoutVersion : DEFAULT_UI.layoutVersion,
   };
 }

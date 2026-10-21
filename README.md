@@ -76,11 +76,11 @@ An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
 
-The Pages section at the top of the sidebar lists them. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. The page is the first segment of the URL hash (`#checkout`), so a link opens that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page the section is hidden and every card is mounted.
+The sidebar is one tree: page → group → artboard, every node collapsed until opened. Click a page name to select it and expand it; the chevron only folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens and expands that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page its groups are the top level and every card is mounted.
 
 ## Groups
 
-Inside a page, the sidebar lists its groups: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard in the list to zoom to it. The chevron collapses a group.
+Inside a page, the tree lists its groups when there is more than one: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Pages and groups show their artboard count. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard to zoom to it. The chevron folds a group.
 
 ## Review build
 
