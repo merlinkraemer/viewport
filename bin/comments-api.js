@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 export const COMMENTS_ROUTE = '/__viewport/comments';
+export const REVIEWED_ROUTE = '/__viewport/reviewed';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TEXT_LENGTH = 10000;
 
@@ -13,7 +14,7 @@ class HttpError extends Error {
   }
 }
 
-async function readComments(filePath) {
+async function readJsonObject(filePath) {
   let raw;
   try {
     raw = await fs.readFile(filePath, 'utf8');
@@ -34,7 +35,7 @@ async function readComments(filePath) {
   return data;
 }
 
-async function writeComments(filePath, data) {
+async function writeJsonObject(filePath, data) {
   const tmpPath = `${filePath}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
@@ -99,6 +100,16 @@ function updateComment(data, body) {
   return comment;
 }
 
+function markReviewed(data, body) {
+  const keys = Array.isArray(body.keys) ? body.keys.filter((key) => typeof key === 'string' && key.trim()) : [];
+  if (!keys.length) throw new HttpError(400, 'keys must be a non-empty array of artboard or variation ids');
+  const mark = { at: new Date().toISOString(), done: body.done !== false };
+  keys.forEach((key) => {
+    data[key] = mark;
+  });
+  return mark;
+}
+
 function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -106,7 +117,12 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-export function createCommentsMiddleware(filePath) {
+export function reviewedPathFor(commentsPath) {
+  return path.join(path.dirname(commentsPath), 'reviewed.json');
+}
+
+export function createCommentsMiddleware(commentsPath) {
+  const reviewedPath = reviewedPathFor(commentsPath);
   let queue = Promise.resolve();
   const serialized = (task) => {
     const run = queue.then(task, task);
@@ -114,26 +130,47 @@ export function createCommentsMiddleware(filePath) {
     return run;
   };
 
+  async function handleComments(req, res) {
+    if (req.method === 'GET') {
+      sendJson(res, 200, await readJsonObject(commentsPath));
+      return;
+    }
+    if (req.method !== 'POST' && req.method !== 'PATCH') throw new HttpError(405, 'Use GET, POST or PATCH');
+    const body = await readBody(req);
+    const comment = await serialized(async () => {
+      const data = await readJsonObject(commentsPath);
+      const changed = req.method === 'POST' ? addComment(data, body) : updateComment(data, body);
+      await writeJsonObject(commentsPath, data);
+      return changed;
+    });
+    sendJson(res, req.method === 'POST' ? 201 : 200, comment);
+  }
+
+  async function handleReviewed(req, res) {
+    if (req.method === 'GET') {
+      sendJson(res, 200, await readJsonObject(reviewedPath));
+      return;
+    }
+    if (req.method !== 'POST') throw new HttpError(405, 'Use GET or POST');
+    const body = await readBody(req);
+    const mark = await serialized(async () => {
+      const data = await readJsonObject(reviewedPath);
+      const changed = markReviewed(data, body);
+      await writeJsonObject(reviewedPath, data);
+      return changed;
+    });
+    sendJson(res, 200, mark);
+  }
+
   return async (req, res, next) => {
     const route = (req.url || '').split('?')[0];
-    if (!route.endsWith(COMMENTS_ROUTE)) {
+    const handler = route.endsWith(COMMENTS_ROUTE) ? handleComments : route.endsWith(REVIEWED_ROUTE) ? handleReviewed : null;
+    if (!handler) {
       next();
       return;
     }
     try {
-      if (req.method === 'GET') {
-        sendJson(res, 200, await readComments(filePath));
-        return;
-      }
-      if (req.method !== 'POST' && req.method !== 'PATCH') throw new HttpError(405, 'Use GET, POST or PATCH');
-      const body = await readBody(req);
-      const comment = await serialized(async () => {
-        const data = await readComments(filePath);
-        const changed = req.method === 'POST' ? addComment(data, body) : updateComment(data, body);
-        await writeComments(filePath, data);
-        return changed;
-      });
-      sendJson(res, req.method === 'POST' ? 201 : 200, comment);
+      await handler(req, res);
     } catch (err) {
       sendJson(res, err.status || 500, { error: err.message });
     }
