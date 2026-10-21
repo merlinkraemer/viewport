@@ -147,6 +147,17 @@
   background: var(--ff-hover);
 }
 
+.sidebar-item[draggable="true"],
+.sidebar-item--artboard[draggable="true"] {
+  cursor: grab;
+}
+
+.sidebar-item--dragging {
+  opacity: 0.4;
+  background: var(--ff-surface) !important;
+  cursor: grabbing;
+}
+
 .sidebar-item-icon-wrap {
   display: flex;
   align-items: center;
@@ -915,65 +926,4 @@ body.sidebar-resizing .sidebar-resize::after {
 body.sidebar-resizing {
   cursor: col-resize;
   user-select: none;
-}
-
-.sidebar-item-number {
-  flex-shrink: 0;
-  min-width: 16px;
-  color: var(--ff-faint);
-  font-family: var(--ff-font-mono);
-  font-size: var(--ff-type-label-sm);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.sidebar-open-comments {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 0 var(--ff-space-4) var(--ff-space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--ff-space-1);
-}
-
-.sidebar-open-comments-empty {
-  padding: var(--ff-space-2) var(--ff-space-3);
-  color: var(--ff-faint);
-  font-size: var(--ff-type-compact);
-}
-
-.sidebar-open-comment {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: var(--ff-space-2) var(--ff-space-3);
-  border: none;
-  border-radius: var(--ff-radius-sm);
-  background: none;
-  color: var(--ff-text-mid);
-  font-family: var(--ff-font);
-  text-align: left;
-  cursor: pointer;
-}
-
-.sidebar-open-comment:hover {
-  background: var(--ff-hover);
-  color: var(--ff-text);
-}
-
-.sidebar-open-comment-where {
-  font-family: var(--ff-font-mono);
-  font-size: var(--ff-type-label-sm);
-  color: var(--ff-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-open-comment-text {
-  font-size: var(--ff-type-compact);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

@@ -2,18 +2,13 @@ import { artboardGroup, sortGroups } from './config.js';
 
 export const LAYOUT_ORIGIN = { x: 48, y: 56 };
 export const BAND_PADDING = 24;
-const HEADER_HEIGHT = 44;
-const QUESTION_HEIGHT = 26;
+export const GROUP_HEADER_HEIGHT = 44;
 const CARD_GAP = 48;
 const GROUP_GAP = 120;
 const ROW_WIDTH = 2400;
 const WIDE_WIDTH = 1200;
 const COLUMN_WIDTH_RATIO = 3;
 const DEFAULT_SIZE = { width: 320, height: 260 };
-
-export function groupHeaderHeight(question) {
-  return HEADER_HEIGHT + (question ? QUESTION_HEIGHT : 0);
-}
 
 function intersects(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -35,17 +30,12 @@ function compareEntries(a, b) {
   return a.index - b.index;
 }
 
-function groupQuestion(items) {
-  const asked = items.find(({ entry }) => typeof entry.question === 'string' && entry.question.trim());
-  return asked ? asked.entry.question.trim() : null;
-}
-
 function orderedGroups(items) {
   const sorted = items.slice().sort(compareEntries);
   return sortGroups(items.map(({ entry }) => entry))
     .map((group) => {
       const members = sorted.filter(({ entry }) => artboardGroup(entry) === group);
-      return { group, question: groupQuestion(members), items: members };
+      return { group, items: members };
     })
     .filter(({ items: members }) => members.length);
 }
@@ -64,10 +54,10 @@ function layoutSet(doc, items) {
   const left = LAYOUT_ORIGIN.x;
   let y = LAYOUT_ORIGIN.y;
 
-  orderedGroups(items).forEach(({ question, items: members }) => {
+  orderedGroups(items).forEach(({ items: members }) => {
     const cards = members.filter(({ id }) => !doc.artboards[id].moved);
     if (!cards.length) return;
-    y += groupHeaderHeight(question);
+    y += GROUP_HEADER_HEIGHT;
     const sizeOf = (id) => doc.artboards[id].size || DEFAULT_SIZE;
     const column = usesColumn(cards.map(({ id }) => sizeOf(id)));
     let x = left;
@@ -122,8 +112,8 @@ export function readingOrder(doc, registry) {
   collectSets(doc, registry).forEach((items) => {
     const page = doc.artboards[items[0].id].page;
     const projectId = doc.artboards[items[0].id].projectId;
-    orderedGroups(items).forEach(({ group, question, items: members }) => {
-      groups.push({ page, projectId, group, question, ids: members.map(({ id }) => id) });
+    orderedGroups(items).forEach(({ group, items: members }) => {
+      groups.push({ page, projectId, group, ids: members.map(({ id }) => id) });
     });
   });
   return groups;

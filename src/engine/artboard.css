@@ -190,22 +190,3 @@
   font-size: var(--ff-type-label);
   font-variant-numeric: tabular-nums;
 }
-
-.ff-card--commented .ff-card__order {
-  color: var(--ff-bg);
-  background: var(--ff-accent);
-  border-color: var(--ff-accent);
-}
-
-.ff-card--commented .ff-card__body {
-  border-color: var(--ff-accent);
-}
-
-.ff-card--current .ff-card__body {
-  outline: 2px solid var(--ff-accent);
-  outline-offset: 6px;
-}
-
-.ff-card--current .ff-card__title {
-  color: var(--ff-text);
-}
