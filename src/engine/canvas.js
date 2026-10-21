@@ -8,7 +8,7 @@ import { storageKey, artboardGroup } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
 
-const SCALE_BY = 1.05;
+const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
 const SNAP = 8;
@@ -230,34 +230,35 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     };
   }
 
+  function zoomAt(clientX, clientY, nextScale) {
+    const r = viewport.getBoundingClientRect();
+    const px = clientX - r.left;
+    const py = clientY - r.top;
+    const oldScale = stage.scaleX();
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+    const mousePointTo = {
+      x: (px - stage.x()) / oldScale,
+      y: (py - stage.y()) / oldScale,
+    };
+    stage.scale({ x: newScale, y: newScale });
+    stage.position({
+      x: px - mousePointTo.x * newScale,
+      y: py - mousePointTo.y * newScale,
+    });
+    stage.batchDraw();
+    syncDOM();
+  }
+
+  let lastPinchWheelAt = 0;
+
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
 
-    const r = viewport.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
-
     if (e.ctrlKey || e.metaKey) {
-      const oldScale = stage.scaleX();
-      const mousePointTo = {
-        x: (px - stage.x()) / oldScale,
-        y: (py - stage.y()) / oldScale,
-      };
-
-      let direction = e.deltaY > 0 ? 1 : -1;
-      if (e.ctrlKey || e.metaKey) direction = -direction;
-
-      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE,
-        direction > 0 ? oldScale * SCALE_BY : oldScale / SCALE_BY
-      ));
-
-      stage.scale({ x: newScale, y: newScale });
-      stage.position({
-        x: px - mousePointTo.x * newScale,
-        y: py - mousePointTo.y * newScale,
-      });
-      stage.batchDraw();
-      syncDOM();
+      lastPinchWheelAt = e.timeStamp;
+      const lineScale = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const delta = Math.max(-PINCH_DELTA_CAP, Math.min(PINCH_DELTA_CAP, e.deltaY * lineScale));
+      zoomAt(e.clientX, e.clientY, stage.scaleX() * Math.exp(-delta / 100));
     } else {
       const scale = stage.scaleX();
       const dx = e.deltaX / scale;
@@ -269,6 +270,26 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
       stage.batchDraw();
       syncDOM();
     }
+  }, { passive: false });
+
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  }, { passive: false });
+
+  let gestureStartScale = null;
+  document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    gestureStartScale = stage.scaleX();
+  }, { passive: false });
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (gestureStartScale === null || e.timeStamp - lastPinchWheelAt < 200) return;
+    if (!viewport.contains(e.target)) return;
+    zoomAt(e.clientX, e.clientY, gestureStartScale * e.scale);
+  }, { passive: false });
+  document.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+    gestureStartScale = null;
   }, { passive: false });
 
   const pendingSizes = new Map();
