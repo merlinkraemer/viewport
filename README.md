@@ -61,7 +61,6 @@ Every artboard exports `meta` and a default `render()` that returns one DOM elem
 | `page` | page the card lives on; defaults to the top-level folder under `artboards/` |
 | `group` | sidebar group inside the page; defaults to the artboard's folder |
 | `order` | optional number; reading order in the group, and the group's place on the page (lowest first) |
-| `question` | optional; on a group's first card, the group's one-line decision question shown in its header |
 | `id` | optional id override; defaults to the file path |
 
 ## Feedback by id
@@ -103,11 +102,7 @@ Inside a page, the tree lists its groups when there is more than one: `meta.grou
 
 ## Layout
 
-Each page lays itself out for review. Groups stack top to bottom, each in one band headed by its title, card count and optional `question`. Inside a group the order is `meta.order`, then file order, and every card shows its number (1, 2, 3 …). The cards run as one left-to-right row, top-aligned with even gaps, that wraps at 2400 px. A group whose widest card is 1200 px or wider, or more than three times its narrowest, runs as a single column instead. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
-
-## Review
-
-Step through the current page in reading order: → or J for the next card, ← or K for the previous one. Each step centres the card and zooms so the largest card of its group fits, so a group's cards keep one scale. C opens the card's comment thread, ⌘/Ctrl+Enter saves, Esc closes it. The readout at the bottom shows the position in the group and on the page. Cards with comments get a filled number and an accent border, and the sidebar's "Open comments" list jumps to the page's commented cards.
+Each page lays itself out for review. Groups stack top to bottom, each in one band headed by its title and card count. Inside a group the order is `meta.order`, then file order, and every card shows its number (1, 2, 3 …). The cards run as one left-to-right row, top-aligned with even gaps, that wraps at 2400 px. A group whose widest card is 1200 px or wider, or more than three times its narrowest, runs as a single column instead. Cards relayout as they measure, so nothing overlaps. A card you drag keeps its spot; the others flow around it.
 
 ## Review build
 

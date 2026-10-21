@@ -6,8 +6,6 @@ import { loadInitialDocument, createDocumentStore, clearStoredState } from './do
 import { createCommentsStore } from './comments.js';
 import { createCommentThread } from './comment-thread.js';
 import { copyText } from './dom.js';
-import { readingOrder } from './layout.js';
-import { createReview } from './review.js';
 
 export { setEngineConfig };
 
@@ -127,13 +125,11 @@ function mountViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
-  let review = null;
   const comments = createCommentsStore({
     onChange() {
       canvas.refreshComments();
       commentThread.refresh();
       sidebar.render(buildSidebarModel(documentStore.get()));
-      review?.update();
     },
   });
   const commentThread = createCommentThread(comments);
@@ -149,10 +145,7 @@ function mountViewport({
     pinSidebar,
     registry: activeRegistry,
     comments,
-    onSelectActiveArtboard: (id) => {
-      sidebar.setActiveArtboard(id);
-      review?.update();
-    },
+    onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
     onOpenComments: openComments,
     onCameraChange: () => commentThread.reposition(),
   });
@@ -255,6 +248,15 @@ function mountViewport({
       canvas.centerOn(artboardId);
       openComments(artboardId);
     },
+    onReorderProjectArtboards(projectId, orderedIds) {
+      documentStore.mutate((draft) => {
+        const ids = orderedIds.filter((id) => draft.artboards[id]?.projectId === projectId);
+        const slots = ids.map((id) => draft.artboards[id].sidebarOrder).sort((a, b) => a - b);
+        ids.forEach((id, index) => {
+          draft.artboards[id].sidebarOrder = slots[index];
+        });
+      });
+    },
     onWidthChange(width) {
       documentStore.mutate((draft) => {
         draft.ui.leftSidebarWidth = width;
@@ -263,12 +265,6 @@ function mountViewport({
   });
   document.body.appendChild(sidebar.element);
 
-  review = createReview({
-    canvas,
-    openComments,
-    closeComments: () => commentThread.close(),
-  });
-
   function buildSidebarModel(documentState) {
     const artboardsByProject = {};
     documentState.projects.forEach((project) => {
@@ -276,9 +272,6 @@ function mountViewport({
     });
 
     const registryById = new Map(activeRegistry.map((entry) => [entry.id, entry]));
-    const reading = new Map();
-    const orderedGroups = readingOrder(documentState, activeRegistry);
-    orderedGroups.forEach(({ ids }) => ids.forEach((id, index) => reading.set(id, { rank: reading.size, number: index + 1 })));
     const archivedArtboards = [];
     const activePage = documentState.ui.activePage;
     Object.entries(documentState.artboards).forEach(([id, artboard]) => {
@@ -295,8 +288,6 @@ function mountViewport({
         pinned: artboard.pinned && !artboard.archived,
         commentCount: comments.openCount(id),
         sidebarOrder: artboard.sidebarOrder,
-        readingRank: reading.get(id)?.rank ?? Infinity,
-        orderNumber: reading.get(id)?.number ?? null,
         layer,
         page: artboard.page,
         group: artboardGroup(regEntry || { layer }),
@@ -308,24 +299,8 @@ function mountViewport({
     });
 
     Object.values(artboardsByProject).forEach((rows) => {
-      rows.sort((a, b) => (a.readingRank - b.readingRank) || (a.sidebarOrder - b.sidebarOrder));
+      rows.sort((a, b) => a.sidebarOrder - b.sidebarOrder);
     });
-    const openComments = orderedGroups
-      .filter((group) => !activePage || group.page === activePage)
-      .flatMap(({ group, ids }) => ids.map((id, index) => ({ id, group, number: index + 1 })))
-      .filter(({ id }) => comments.openCount(id) > 0)
-      .map(({ id, group, number }) => {
-        const artboard = documentState.artboards[id];
-        const latest = comments.list(id).filter((comment) => !comment.resolved).at(-1);
-        return {
-          id,
-          number,
-          groupLabel: groupLabel(group, artboard.page),
-          title: shortTitle(artboard.displayName || artboard.sourceTitle, { page: artboard.page, group }),
-          text: latest?.text ?? '',
-          count: comments.openCount(id),
-        };
-      });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
     return {
@@ -337,7 +312,6 @@ function mountViewport({
       activeProjectId: documentState.ui.activeProjectId,
       artboardsByProject,
       archivedArtboards,
-      openComments,
       ui: documentState.ui,
     };
   }
@@ -345,13 +319,11 @@ function mountViewport({
   documentStore.subscribe((state) => {
     canvas.render(state);
     sidebar.render(buildSidebarModel(state));
-    review.update();
   });
 
   const initialState = documentStore.get();
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
-  review.update();
 
   setTimeout(() => documentStore.relayout(activeRegistry), 200);
 

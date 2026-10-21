@@ -7,15 +7,13 @@ import { copyText } from './dom.js';
 import { storageKey, artboardGroup, groupLabel } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
-import { layoutPages, readingOrder, groupHeaderHeight, BAND_PADDING } from './layout.js';
+import { layoutPages, readingOrder, GROUP_HEADER_HEIGHT, BAND_PADDING } from './layout.js';
 
 const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
 const SNAP = 8;
 const CLICK_TRAVEL_PX = 4;
-const REVIEW_MAX_SCALE = 2;
-const FIT_SHARE = 0.8;
 
 const ARTBOARD_BASE_X = 48;
 const ARTBOARD_BASE_Y = 56;
@@ -64,7 +62,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   const projectFrames = new Map();
   let copyToast = null;
   const groupBandEls = new Map();
-  let currentReviewId = null;
   const selectedIds = new Set();
   const relayoutAfterMeasure = debounce(() => documentStore.relayout(registry), MEASURE_SETTLE_MS);
 
@@ -393,7 +390,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }
 
   function getGroupBands(documentState, projectId) {
-    return pageGroups(documentState, projectId).map(({ group, question, ids }) => {
+    return pageGroups(documentState, projectId).map(({ group, ids }) => {
       const artboards = ids.map((id) => documentState.artboards[id]);
       const placed = artboards.filter((artboard) => !artboard.moved);
       const anchors = placed.length ? placed : artboards;
@@ -401,12 +398,10 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       const top = Math.min(...anchors.map((artboard) => artboard.position.y));
       const right = Math.max(...anchors.map((artboard) => artboard.position.x + cardSize(artboard).width));
       const bottom = Math.max(...anchors.map((artboard) => artboard.position.y + cardSize(artboard).height));
-      const headerHeight = groupHeaderHeight(question);
+      const headerHeight = GROUP_HEADER_HEIGHT;
       return {
         group,
-        question,
         count: ids.length,
-        commented: ids.filter((id) => comments.list(id).length > 0).length,
         x: left - BAND_PADDING,
         y: top - headerHeight - BAND_PADDING,
         width: right - left + BAND_PADDING * 2,
@@ -425,12 +420,9 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const count = document.createElement('span');
     count.className = 'canvas-group-band__count';
     header.append(title, count);
-    const question = document.createElement('div');
-    question.className = 'canvas-group-band__question';
-    el.append(header, question);
+    el.append(header);
     el.titleEl = title;
     el.countEl = count;
-    el.questionEl = question;
     return el;
   }
 
@@ -447,9 +439,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
         }
         el.dataset.group = band.group;
         el.titleEl.textContent = groupLabel(band.group, documentState.ui.activePage);
-        el.countEl.textContent = band.commented ? `${band.count} · ${band.commented} commented` : String(band.count);
-        el.questionEl.textContent = band.question || '';
-        el.questionEl.hidden = !band.question;
+        el.countEl.textContent = String(band.count);
         el.style.left = `${band.x}px`;
         el.style.top = `${band.y}px`;
         el.style.width = `${band.width}px`;
@@ -745,7 +735,6 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
     renderGroupBands(documentState, focusGroup);
     numberCards(documentState);
-    applyCurrent();
 
     cards.forEach((entry, id) => {
       if (!renderedIds.has(id)) {
@@ -834,76 +823,35 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     });
   }
 
-  function viewportBox() {
-    const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
-    const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
-    return { left: leftWidth, width: window.innerWidth - leftWidth - rightWidth, height: window.innerHeight };
-  }
-
-  function fitScaleFor(width, height) {
-    const box = viewportBox();
-    return Math.min((box.width * FIT_SHARE) / width, (box.height * FIT_SHARE) / height);
-  }
-
-  function centerWorldRect(rect, scale) {
-    const box = viewportBox();
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
-    const centerX = rect.x + rect.width / 2;
-    const centerY = rect.y + rect.height / 2;
-    animateCanvasTo(newScale, box.left + box.width / 2 - centerX * newScale, box.height / 2 - centerY * newScale);
-  }
-
   function fitClientRect(rect) {
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
-    const worldBox = {
-      x: (rect.left - worldRect.left) / scale,
-      y: (rect.top - worldRect.top) / scale,
-      width: rect.width / scale,
-      height: rect.height / scale,
-    };
-    centerWorldRect(worldBox, Math.min(rect.maxScale ?? MAX_SCALE, fitScaleFor(worldBox.width, worldBox.height)));
-  }
+    const worldX = (rect.left - worldRect.left) / scale;
+    const worldY = (rect.top - worldRect.top) / scale;
+    const worldW = rect.width / scale;
+    const worldH = rect.height / scale;
 
-  function reviewSequence() {
-    const documentState = documentStore.get();
-    const focusGroup = activeFocusGroup(documentState);
-    return documentState.projects
-      .filter((project) => !project.collapsed)
-      .flatMap((project) => pageGroups(documentState, project.id))
-      .filter(({ group }) => focusGroup === null || group === focusGroup)
-      .flatMap(({ group, ids }) => ids
-        .filter((id) => cards.has(id))
-        .map((id, index) => ({ id, group, label: groupLabel(group, documentState.ui.activePage), index, groupIds: ids })));
-  }
+    const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
+    const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
+    const vpW = window.innerWidth - leftWidth - rightWidth;
+    const vpH = window.innerHeight;
 
-  function reviewCard(step) {
-    const documentState = documentStore.get();
-    const artboard = documentState.artboards[step.id];
-    if (!artboard) return;
-    const sizes = step.groupIds.map((id) => cardSize(documentState.artboards[id]));
-    const scale = Math.min(
-      REVIEW_MAX_SCALE,
-      fitScaleFor(Math.max(...sizes.map((size) => size.width)), Math.max(...sizes.map((size) => size.height))),
-    );
-    centerWorldRect({ ...artboard.position, ...cardSize(artboard) }, scale);
-    setCurrent(step.id);
-    onSelectActiveArtboard?.(step.id);
-  }
+    const availW = vpW * 0.8;
+    const availH = vpH * 0.8;
+    const fitScale = Math.min(availW / worldW, availH / worldH);
+    const newScale = Math.max(MIN_SCALE, Math.min(rect.maxScale ?? MAX_SCALE, fitScale));
 
-  function applyCurrent() {
-    cards.forEach((entry, id) => entry.element.classList.toggle('ff-card--current', id === currentReviewId));
-  }
+    const vpCenterX = leftWidth + vpW / 2;
+    const vpCenterY = vpH / 2;
+    const centerX = worldX + worldW / 2;
+    const centerY = worldY + worldH / 2;
 
-  function setCurrent(id) {
-    currentReviewId = id;
-    applyCurrent();
+    animateCanvasTo(newScale, vpCenterX - centerX * newScale, vpCenterY - centerY * newScale);
   }
 
   function centerOn(id) {
     const entry = cards.get(id);
     if (!entry) return;
-    setCurrent(id);
     navigateToCanvasNode(entry.element, id);
   }
 
@@ -1017,17 +965,12 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
   function refreshComments() {
     cards.forEach((entry, id) => entry.element.setCommentCount(comments.openCount(id), comments.list(id).length));
-    renderGroupBands(documentStore.get(), activeFocusGroup(documentStore.get()));
   }
 
   return {
     render,
     refreshComments,
     centerOn,
-    reviewSequence,
-    reviewCard,
-    setCurrent,
-    currentId: () => currentReviewId,
     fitGroup,
     navigateToCanvasNode,
     showCopyToast,
