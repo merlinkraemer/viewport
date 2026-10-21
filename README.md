@@ -71,11 +71,13 @@ Every card shows its id under the title. Click the title or the id to copy it; s
 checkout/option-b  →  viewport/artboards/checkout/option-b.artboard.js
 ```
 
-An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards`. The copy button in the sidebar copies the same id; shift-click there adds name and file.
+An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards`. Right-click an artboard in the sidebar to copy its id.
 
 ## Comments
 
-Each card header has a comment button with a count of open comments. It opens a small thread: add a comment (⌘/Ctrl+Enter), edit one, resolve or reopen it. The sidebar's comment button opens the same thread.
+Each card header has a comment button with a count of open comments. It opens a small thread: add a comment (⌘/Ctrl+Enter), edit one, resolve or reopen it. Right-click an artboard in the sidebar for the same thread.
+
+A card can hold several variations: mark each one's outermost element with `data-variant="<name>"`. Hovering a variation outlines it and shows a small bar with its name, a comment button and "done". Its comments and review state are keyed `<artboard id>#<name>`, for example `device-view/slots#V5`, so the key survives a rebuild as long as the name stays. A card with fewer than two named variations is one unit.
 
 Comments live in `viewport/comments.json`, a file the agent reads and edits, keyed by artboard id:
 
@@ -90,15 +92,21 @@ Comments live in `viewport/comments.json`, a file the agent reads and edits, key
 
 Both `npx viewport` and `npx viewport preview` serve `GET`/`POST`/`PATCH` on `__viewport/comments`, so a review build on a phone saves comments too. Each write rereads the file, so edits an agent made in between survive, and replaces it atomically. A file with broken JSON is never overwritten; the server answers 409 until it is fixed. Another static server shows comments read-only. In dev, an agent's edit to the file shows up live. Comments are not part of the build hash. Notes from older versions, kept in the browser, move into the file on the first load with a server.
 
+## Reviewed
+
+An artboard or variation counts as reviewed once the user commented on it or clicked "done", and stays reviewed until an agent adds a comment after that (`"by": "agent"`), so a reply brings it back. Reviewed things are hidden on the canvas and in the sidebar; "Show reviewed" in the sidebar footer brings them back, and "done" on a reviewed item unmarks it. "done" on a card marks the card and each of its variations; a card with variations is reviewed when all of them are, so a variation added later shows up on its own.
+
+The marks live in `viewport/reviewed.json`, next to `comments.json`, under the same keys: `{ "<key>": { "at": "<ISO time>", "done": true } }`. Both servers serve `GET` and `POST { keys, done }` on `__viewport/reviewed`, with the same file handling as comments. It is not part of the build hash.
+
 ## Pages
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
 
-The sidebar is one tree: page → group → artboard, every node collapsed until opened. Click a page name to select it and expand it; the chevron only folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens and expands that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page its groups are the top level and every card is mounted.
+The sidebar is one tree: page → group → artboard, every node collapsed until opened. Artboard rows carry the card's number from the canvas. Right-click an artboard row to rename, pin, copy its id, open its comments or archive it. Click a page name to select it and expand it; the chevron only folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens and expands that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page its groups are the top level and every card is mounted.
 
 ## Groups
 
-Inside a page, the tree lists its groups when there is more than one: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Pages and groups show their artboard count. Click a group name to show only that group on the canvas and zoom to it; click it again or "show all" to return. Click an artboard to zoom to it. The chevron folds a group.
+Inside a page, the tree lists its groups when there is more than one: `meta.group`, else the folder under `artboards/`, else the classic Primitives / Artboards split. Click a group name to show only that group on the canvas and zoom to it; click it again to return. Click an artboard to zoom to it. The chevron folds a group.
 
 ## Layout
 
@@ -113,7 +121,7 @@ npx viewport preview --host 0.0.0.0   # serve it on port 4182, e.g. over a tailn
 
 The build uses relative asset paths, so any static file server works. No dev server is needed to look at it.
 
-The sidebar footer shows the build stamp: `build abc1234+ · 10-20 16:42 · 9f3c1a2b` (git sha, `+` for uncommitted changes, build time, content hash). `viewport/dist/build.json` holds the same data:
+The sidebar footer shows the build stamp: `abc1234+ · 10-20 16:42 · 9f3c1a2b` (git sha, `+` for uncommitted changes, build time, content hash). `viewport/dist/build.json` holds the same data:
 
 ```json
 { "sha": "abc1234", "dirty": true, "builtAt": "2026-10-20T16:42:00.000Z", "hash": "9f3c1a2b" }
