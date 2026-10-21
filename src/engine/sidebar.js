@@ -90,6 +90,10 @@ function getDisplayName(artboard) {
   return artboard.displayName || artboard.sourceTitle;
 }
 
+function getRowLabel(artboard) {
+  return artboard.displayName || artboard.shortTitle || artboard.sourceTitle;
+}
+
 export function createSidebar(options) {
   const sidebar = document.createElement('aside');
   sidebar.className = 'artboard-sidebar';
@@ -176,7 +180,7 @@ export function createSidebar(options) {
     return header;
   }
 
-  function createSubfolderHeader(title, collapsed, count, { onToggle, onFocus, focused }) {
+  function createSubfolderHeader(title, label, collapsed, count, { onToggle, onFocus, focused }) {
     const header = document.createElement('div');
     header.className = 'sidebar-subfolder-header';
     header.classList.toggle('sidebar-subfolder-header--focused', focused);
@@ -192,8 +196,8 @@ export function createSidebar(options) {
     const titleBtn = document.createElement('button');
     titleBtn.type = 'button';
     titleBtn.className = 'sidebar-subfolder-title';
-    titleBtn.textContent = title;
-    titleBtn.title = focused ? 'Show all groups' : `Show only ${title}`;
+    titleBtn.textContent = label;
+    titleBtn.title = focused ? 'Show all groups' : `Show only ${label}`;
     titleBtn.addEventListener('click', onFocus);
 
     const countEl = document.createElement('span');
@@ -220,14 +224,10 @@ export function createSidebar(options) {
 
     const label = document.createElement('span');
     label.className = 'sidebar-item-label';
-    label.textContent = getDisplayName(artboard);
+    label.textContent = getRowLabel(artboard);
     labelWrap.appendChild(label);
-
-    const meta = document.createElement('span');
-    meta.className = 'sidebar-item-meta';
-    meta.textContent = artboard.id;
-    labelWrap.appendChild(meta);
     body.appendChild(labelWrap);
+    body.title = `${getDisplayName(artboard)}\n${artboard.id}`;
 
     body.addEventListener('click', () => options.onNavigateArtboard?.(artboard.id));
 
@@ -238,7 +238,7 @@ export function createSidebar(options) {
     copyBtn.type = 'button';
     copyBtn.className = 'sidebar-item-action';
     copyBtn.innerHTML = copyIconHtml;
-    copyBtn.title = 'Copy id (shift-click: with name and file)';
+    copyBtn.title = `Copy ${artboard.id} (shift-click: with name and file)`;
     copyBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       options.onCopyArtboard?.(artboard.id, { extended: event.shiftKey || event.altKey });
@@ -377,7 +377,7 @@ export function createSidebar(options) {
     groups.forEach((group) => {
       const key = groupNodeKey(page, group.name);
       const open = expanded.has(key);
-      const header = createSubfolderHeader(group.name, !open, group.artboards.length, {
+      const header = createSubfolderHeader(group.name, group.artboards[0].groupLabel, !open, group.artboards.length, {
         focused: model.focusGroup === group.name,
         onToggle: () => options.onToggleNode?.(key),
         onFocus: () => options.onFocusGroup?.(group.name, { page, nodeKey: key }),
@@ -431,7 +431,8 @@ export function createSidebar(options) {
           const showAll = document.createElement('button');
           showAll.type = 'button';
           showAll.className = 'sidebar-show-all';
-          showAll.textContent = `Showing ${model.focusGroup} · show all`;
+          const focusedRow = projectArtboards.find((artboard) => artboard.group === model.focusGroup);
+          showAll.textContent = `Showing ${focusedRow?.groupLabel ?? model.focusGroup} · show all`;
           showAll.addEventListener('click', () => options.onFocusGroup?.(model.focusGroup, { page: model.activePage }));
           list.appendChild(showAll);
         }

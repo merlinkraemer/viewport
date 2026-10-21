@@ -1,4 +1,4 @@
-import { artboardGroup } from './config.js';
+import { artboardGroup, sortGroups } from './config.js';
 
 export const LAYOUT_ORIGIN = { x: 48, y: 56 };
 export const GROUP_HEADER_HEIGHT = 40;
@@ -29,7 +29,7 @@ function compareEntries(a, b) {
 }
 
 export function pageGroups(entries) {
-  return [...new Set(entries.map((entry) => artboardGroup(entry)))];
+  return sortGroups(entries);
 }
 
 function layoutSet(doc, items) {

@@ -1,8 +1,3 @@
-html,
-body {
-  touch-action: pan-x pan-y;
-}
-
 .canvas-viewport {
   position: absolute;
   top: 0;

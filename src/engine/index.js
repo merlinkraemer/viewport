@@ -1,8 +1,8 @@
-import { setEngineConfig, artboardGroup, LAYER_GROUPS, listPages } from './config.js';
+import { setEngineConfig, artboardGroup, listPages, sortGroups, groupLabel, shortTitle } from './config.js';
 import { createCanvas } from './canvas.js';
 import { createSidebar, pageNodeKey } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
-import { loadInitialDocument, createDocumentStore } from './document-store.js';
+import { loadInitialDocument, createDocumentStore, clearStoredState } from './document-store.js';
 import { createCommentsStore } from './comments.js';
 import { createCommentThread } from './comment-thread.js';
 import { copyText } from './dom.js';
@@ -10,16 +10,32 @@ import { copyText } from './dom.js';
 export { setEngineConfig };
 
 /**
- * @param {object}  opts
- * @param {Element} opts.mount             container for the canvas viewport
- * @param {Array}   opts.registry          [{ id, sourceTitle, layer, render, file?, group?, page? }]
- * @param {Array}   [opts.layers]          taxonomy [{ key, label }]
- * @param {string}  [opts.storageNamespace]
- * @param {string}  [opts.defaultProjectName]
- * @param {object}  [opts.build]           review build stamp { sha, dirty, builtAt, hash }; null in dev
+ * @param {object}  options
+ * @param {Element} options.mount             container for the canvas viewport
+ * @param {Array}   options.registry          [{ id, sourceTitle, layer, render, file?, group?, page? }]
+ * @param {Array}   [options.layers]          taxonomy [{ key, label }]
+ * @param {string}  [options.storageNamespace]
+ * @param {string}  [options.defaultProjectName]
+ * @param {object}  [options.build]           review build stamp { sha, dirty, builtAt, hash }; null in dev
  * @returns {{ documentStore, canvas, sidebar, pinSidebar, updateRegistry }}
  */
-export function createViewport({
+export function createViewport(options = {}) {
+  const recoveryKey = `${options.storageNamespace || 'viewport'}:recovered`;
+  try {
+    const app = mountViewport(options);
+    sessionStorage.removeItem(recoveryKey);
+    return app;
+  } catch (err) {
+    if (!options.mount || !Array.isArray(options.registry) || sessionStorage.getItem(recoveryKey)) throw err;
+    console.warn('viewport: failed to start with the saved state; clearing it and reloading', err);
+    sessionStorage.setItem(recoveryKey, '1');
+    clearStoredState();
+    window.location.reload();
+    return null;
+  }
+}
+
+function mountViewport({
   mount,
   registry,
   layers,
@@ -71,6 +87,9 @@ export function createViewport({
     bootstrapDoc.ui.expanded.push(pageNodeKey(linkedPage));
   }
   bootstrapDoc.ui.activePage = resolvePage(linkedPage ?? bootstrapDoc.ui.activePage);
+  const focusOnPage = activeRegistry.some((entry) => artboardGroup(entry) === bootstrapDoc.ui.focusGroup
+    && (!bootstrapDoc.ui.activePage || bootstrapDoc.artboards[entry.id]?.page === bootstrapDoc.ui.activePage));
+  if (!focusOnPage) bootstrapDoc.ui.focusGroup = null;
   reflectPage(bootstrapDoc.ui.activePage);
   const documentStore = createDocumentStore(bootstrapDoc);
 
@@ -273,6 +292,8 @@ export function createViewport({
         page: artboard.page,
         group: artboardGroup(regEntry || { layer }),
       };
+      modelEntry.shortTitle = shortTitle(artboard.sourceTitle, { page: artboard.page, group: modelEntry.group });
+      modelEntry.groupLabel = groupLabel(modelEntry.group, artboard.page);
       if (!artboard.archived) artboardsByProject[artboard.projectId]?.push(modelEntry);
       else if (!activePage || artboard.page === activePage) archivedArtboards.push(modelEntry);
     });
@@ -282,11 +303,10 @@ export function createViewport({
     });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
-    const namedGroups = [...new Set(activeRegistry.map((entry) => entry.group).filter(Boolean))];
     return {
       pages,
       activePage,
-      groupOrder: [...namedGroups, ...LAYER_GROUPS],
+      groupOrder: sortGroups(activeRegistry),
       focusGroup: documentState.ui.focusGroup,
       projects: documentState.projects,
       activeProjectId: documentState.ui.activeProjectId,

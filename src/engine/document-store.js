@@ -1,7 +1,7 @@
 import { storageKey, getDefaultProjectName, pageId } from './config.js';
 import { layoutPages, LAYOUT_ORIGIN } from './layout.js';
 
-const DOC_VERSION = 1;
+const DOC_VERSION = 2;
 const DEFAULT_PROJECT_ID = 'default';
 
 const DEFAULT_UI = {
@@ -187,6 +187,65 @@ function ensureVisibleRegistryArtboards(doc, registry) {
   });
 }
 
+function migrateFromV1(raw) {
+  const ui = raw.ui && typeof raw.ui === 'object' ? raw.ui : {};
+  const artboards = raw.artboards && typeof raw.artboards === 'object' ? raw.artboards : {};
+  return {
+    version: DOC_VERSION,
+    projects: Array.isArray(raw.projects)
+      ? raw.projects.map((project) => ({ ...project, collapsed: false }))
+      : [],
+    artboards: Object.fromEntries(Object.entries(artboards).map(([id, artboard]) => [id, {
+      displayName: artboard?.displayName,
+      projectId: artboard?.projectId,
+      archived: artboard?.archived,
+      pinned: artboard?.pinned,
+    }])),
+    notes: raw.notes,
+    ui: {
+      leftSidebarOpen: ui.leftSidebarOpen,
+      leftSidebarWidth: ui.leftSidebarWidth,
+      pinPanelOpen: ui.pinPanelOpen,
+      pinPanelWidth: ui.pinPanelWidth,
+    },
+  };
+}
+
+function clearStoredCameras() {
+  const prefix = storageKey('camera');
+  Object.keys(localStorage)
+    .filter((key) => key === prefix || key.startsWith(`${prefix}:`))
+    .forEach((key) => localStorage.removeItem(key));
+}
+
+export function migrateDocument(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    if (raw !== null) console.warn('viewport: saved state is not a document; starting fresh');
+    clearStoredCameras();
+    return null;
+  }
+  if (raw.version === DOC_VERSION) return raw;
+  if (raw.version === 1 || raw.version === undefined) {
+    console.warn(`viewport: saved state is from an older version (v${raw.version ?? 0}); keeping names, pins and archive, resetting layout and view`);
+    clearStoredCameras();
+    return migrateFromV1(raw);
+  }
+  console.warn(`viewport: saved state has unknown version ${raw.version}; starting fresh`);
+  clearStoredCameras();
+  return null;
+}
+
+export function clearStoredState() {
+  try {
+    const prefix = storageKey('');
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(prefix))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch (err) {
+    console.warn('viewport: could not clear saved state', err);
+  }
+}
+
 export function normalizeDocument(raw) {
   const base = raw && typeof raw === 'object' ? raw : createEmptyDocument();
   const doc = {
@@ -260,22 +319,20 @@ function syncRegistry(doc, registry) {
   return doc;
 }
 
+function buildDocument(raw, registry) {
+  return normalizeDocument(syncRegistry(normalizeDocument(raw ?? createEmptyDocument()), registry));
+}
+
 export function loadInitialDocument(registry) {
-  let raw = null;
+  let finalDoc;
   try {
     const data = localStorage.getItem(storageKey('document'));
-    raw = data ? JSON.parse(data) : null;
+    finalDoc = buildDocument(migrateDocument(data ? JSON.parse(data) : null), registry);
   } catch (err) {
-    console.error('Failed to load canvas document from localStorage', err);
+    console.warn('viewport: saved state could not be read; starting fresh', err);
+    clearStoredState();
+    finalDoc = buildDocument(null, registry);
   }
-
-  if (!raw) {
-    raw = createEmptyDocument();
-  }
-
-  const normalized = normalizeDocument(raw);
-  const synced = syncRegistry(normalized, registry);
-  const finalDoc = normalizeDocument(synced);
 
   try {
     localStorage.setItem(storageKey('document'), JSON.stringify(finalDoc));

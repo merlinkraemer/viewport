@@ -4,7 +4,7 @@ import './pin-sidebar.css';
 import Konva from 'konva';
 import { createArtboard } from './artboard.js';
 import { copyText } from './dom.js';
-import { storageKey, artboardGroup } from './config.js';
+import { storageKey, artboardGroup, groupLabel } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
 import { layoutPages, GROUP_HEADER_HEIGHT } from './layout.js';
@@ -416,7 +416,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
           el.dataset.group = header.group;
           groupHeaderEls.set(key, el);
         }
-        el.textContent = `${header.group} · ${header.count}`;
+        el.textContent = `${groupLabel(header.group, documentState.ui.activePage)} · ${header.count}`;
         el.style.left = `${header.x}px`;
         el.style.top = `${header.y}px`;
         el.style.display = focusGroup !== null && focusGroup !== header.group ? 'none' : '';

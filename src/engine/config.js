@@ -31,6 +31,47 @@ export function artboardGroup(entry) {
   return entry?.layer === 'primitive' ? LAYER_GROUPS[0] : LAYER_GROUPS[1];
 }
 
+function slug(text) {
+  return String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+const LEADING_SEGMENT = /^(.+?)\s*(?:·|:|\/|—|–|\|)\s*(.+)$/;
+
+function stripLeadingSegments(text, redundant) {
+  let rest = String(text ?? '');
+  for (let match = rest.match(LEADING_SEGMENT); match && redundant.has(slug(match[1])); match = rest.match(LEADING_SEGMENT)) {
+    rest = match[2];
+  }
+  return rest;
+}
+
+export function groupLabel(group, page) {
+  return stripLeadingSegments(group, new Set([page].filter(Boolean)));
+}
+
+export function shortTitle(title, { page, group } = {}) {
+  const redundant = new Set([page, slug(group), group ? slug(groupLabel(group, page)) : null].filter(Boolean));
+  const short = stripLeadingSegments(title, redundant);
+  return short === title ? short : short.charAt(0).toUpperCase() + short.slice(1);
+}
+
+function leadingNumber(label) {
+  const match = String(label).match(/^\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : Infinity;
+}
+
+export function sortGroups(entries) {
+  const groups = new Map();
+  entries.forEach((entry, index) => {
+    const name = artboardGroup(entry);
+    if (!groups.has(name)) groups.set(name, { name, first: index, order: Infinity, number: leadingNumber(groupLabel(name, pageId(entry))) });
+    if (Number.isFinite(entry.order)) groups.get(name).order = Math.min(groups.get(name).order, entry.order);
+  });
+  return [...groups.values()]
+    .sort((a, b) => (a.order - b.order) || (a.number - b.number) || (a.first - b.first))
+    .map((group) => group.name);
+}
+
 export const FALLBACK_PAGE = { id: 'other', label: 'Other' };
 
 function pageLabel(entry) {
