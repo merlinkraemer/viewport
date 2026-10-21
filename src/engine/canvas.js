@@ -271,6 +271,31 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     }
   }, { passive: false });
 
+  const pendingSizes = new Map();
+  let sizeFlushTimer = null;
+  function flushSizes() {
+    sizeFlushTimer = null;
+    const doc = documentStore.get();
+    const changed = [...pendingSizes].filter(([id, size]) => {
+      const current = doc.artboards[id]?.size;
+      return doc.artboards[id] && (!current || current.width !== size.width || current.height !== size.height);
+    });
+    const firstMeasure = changed.some(([id]) => !doc.artboards[id].size);
+    pendingSizes.clear();
+    if (!changed.length) return;
+    documentStore.mutate((draft) => {
+      changed.forEach(([id, size]) => {
+        if (draft.artboards[id]) draft.artboards[id].size = size;
+      });
+    }, { persist: true });
+    if (firstMeasure) resolveAfterFirstMeasure();
+  }
+
+  function queueSize(id, size) {
+    pendingSizes.set(id, size);
+    sizeFlushTimer ??= setTimeout(flushSizes, 100);
+  }
+
   function ensureCardEntry(id) {
     if (cards.has(id)) return cards.get(id);
 
@@ -282,29 +307,10 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, on
     el.classList.add('module-card--positioned');
     el.dataset.artboardId = id;
 
-    let resizeTimeout = null;
     const ro = new ResizeObserver(() => {
-      const cardW = Math.round(el.offsetWidth);
-      const cardH = Math.round(el.offsetHeight);
-      if (cardW > 0 && cardH > 0) {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          const currentDoc = documentStore.get();
-          const artboard = currentDoc.artboards[id];
-          if (artboard) {
-            const currentSize = artboard.size;
-            if (!currentSize || currentSize.width !== cardW || currentSize.height !== cardH) {
-              const isFirstMeasure = !currentSize;
-              documentStore.mutate((draft) => {
-                if (draft.artboards[id]) {
-                  draft.artboards[id].size = { width: cardW, height: cardH };
-                }
-              }, { persist: true });
-              if (isFirstMeasure) resolveAfterFirstMeasure();
-            }
-          }
-        }, 100);
-      }
+      const width = Math.round(el.offsetWidth);
+      const height = Math.round(el.offsetHeight);
+      if (width > 0 && height > 0) queueSize(id, { width, height });
     });
     ro.observe(el);
 
