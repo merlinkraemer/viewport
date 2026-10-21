@@ -50,22 +50,21 @@
   background: var(--ff-select);
 }
 
-.sidebar-row button,
-.sidebar-row a {
+:where(.sidebar-row) :where(button, a) {
   all: unset;
   cursor: pointer;
 }
 
-.sidebar-row button:focus-visible,
-.sidebar-row a:focus-visible {
+:where(.sidebar-row) :where(button, a):focus-visible {
   outline: 1px solid var(--ff-border-hi);
   outline-offset: 1px;
 }
 
 .sidebar-row__chevron {
   flex: none;
-  width: 14px;
-  color: var(--ff-faint);
+  width: 16px;
+  margin-right: var(--ff-space-1);
+  color: var(--ff-muted);
   font-size: 9px;
   text-align: center;
 }
@@ -146,8 +145,11 @@
   font-size: var(--ff-type-label);
 }
 
-.sidebar-reviewed-toggle {
+:where(.sidebar-reviewed-toggle) {
   all: unset;
+}
+
+.sidebar-reviewed-toggle {
   flex: none;
   cursor: pointer;
   color: var(--ff-muted);
