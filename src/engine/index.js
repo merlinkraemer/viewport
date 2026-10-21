@@ -40,8 +40,12 @@ export function createViewport({
   let pages = listPages(activeRegistry);
   const baseTitle = document.title;
 
+  function hashPage() {
+    return decodeURIComponent(window.location.hash.slice(1)).split(/[/?]/)[0];
+  }
+
   function pageFromHash() {
-    const slug = decodeURIComponent(window.location.hash.slice(1)).split('/')[0];
+    const slug = hashPage();
     return pages.some((page) => page.id === slug) ? slug : null;
   }
 
@@ -54,10 +58,9 @@ export function createViewport({
   function reflectPage(page) {
     const label = pages.find((entry) => entry.id === page)?.label;
     document.title = label ? `${label} · ${baseTitle}` : baseTitle;
-    const hash = page ? `#${page}` : '';
-    if (window.location.hash !== hash) {
+    if (page && hashPage() !== page) {
       const url = new URL(window.location.href);
-      url.hash = hash;
+      url.hash = page;
       window.history.replaceState(null, '', url);
     }
   }

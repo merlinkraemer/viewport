@@ -76,7 +76,7 @@ An id set with `meta.id` is found with `grep -rn "id: '<id>'" viewport/artboards
 
 A page is one focus area of the project, such as `checkout` or `settings`. Each top-level folder under `artboards/` is a page; `meta.page` puts a card on another page. Cards at the root of `artboards/` land on "Other".
 
-The Pages section at the top of the sidebar lists them. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. The page is in the URL hash (`#checkout`), so a link opens that page, and each page keeps its own camera. With a single page the section is hidden and every card is mounted.
+The Pages section at the top of the sidebar lists them. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. The page is the first segment of the URL hash (`#checkout`), so a link opens that page; anything after it (`#checkout/option-b?step=2`) is left to the artboards. Each page keeps its own camera. With a single page the section is hidden and every card is mounted.
 
 ## Groups
 
