@@ -12,6 +12,8 @@ import { layoutPages, readingOrder, GROUP_HEADER_HEIGHT, BAND_PADDING } from './
 const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
+const READABLE_MIN_SCALE = 0.4;
+const AUTO_FIT_QUIET_MS = 1500;
 const SNAP = 8;
 const CLICK_TRAVEL_PX = 4;
 
@@ -58,6 +60,8 @@ function readStoredCamera(page) {
 
 export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
   let currentPage;
+  let autoFitting = false;
+  let autoFitTimer = null;
   const cards = new Map();
   const projectFrames = new Map();
   let copyToast = null;
@@ -221,6 +225,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }
   syncDOM({ persist: false });
 
+  stage.on('dragstart', () => stopAutoFit());
   stage.on('dragmove', syncDOM);
   stage.on('dragend', syncDOM);
 
@@ -234,6 +239,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }
 
   function zoomAt(clientX, clientY, nextScale) {
+    stopAutoFit();
     const r = viewport.getBoundingClientRect();
     const px = clientX - r.left;
     const py = clientY - r.top;
@@ -256,6 +262,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
+    stopAutoFit();
 
     if (e.ctrlKey || e.metaKey) {
       lastPinchWheelAt = e.timeStamp;
@@ -506,27 +513,65 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     });
   }
 
-  function showPage(documentState) {
-    const page = documentState.ui.activePage;
-    if (page === currentPage) return;
-    if (currentPage !== undefined) writeCamera();
-    currentPage = page;
-    const pageArtboards = Object.values(documentState.artboards)
+  function pageArtboardsOf(documentState) {
+    return Object.values(documentState.artboards)
       .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard));
-    const stored = readStoredCamera(page);
-    if (stored && (!pageArtboards.length || cameraShowsAnyArtboard(stored, pageArtboards))) {
-      stage.scale({ x: stored.scale, y: stored.scale });
-      stage.position({ x: stored.x, y: stored.y });
-    } else {
-      const positions = pageArtboards.map((artboard) => artboard.position);
-      const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
-      const minX = positions.length ? Math.min(...positions.map((p) => p.x), ...bands.map((band) => band.x)) : 0;
-      const minY = positions.length ? Math.min(...positions.map((p) => p.y), ...bands.map((band) => band.y)) : 0;
+  }
+
+  function fitPageTopLeft(documentState) {
+    const artboards = pageArtboardsOf(documentState);
+    const { left, right } = getCanvasInsets();
+    if (!artboards.length) {
       stage.scale({ x: 1, y: 1 });
-      stage.position({ x: getCanvasInsets().left + ARTBOARD_BASE_X - minX, y: ARTBOARD_BASE_Y - minY });
+      stage.position({ x: left + ARTBOARD_BASE_X, y: ARTBOARD_BASE_Y });
+    } else {
+      const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
+      const rects = [
+        ...artboards.map((artboard) => ({ ...artboard.position, ...cardSize(artboard) })),
+        ...bands,
+      ];
+      const minX = Math.min(...rects.map((rect) => rect.x));
+      const minY = Math.min(...rects.map((rect) => rect.y));
+      const maxX = Math.max(...rects.map((rect) => rect.x + rect.width));
+      const availableWidth = window.innerWidth - left - right - ARTBOARD_BASE_X * 2;
+      const scale = Math.max(READABLE_MIN_SCALE, Math.min(1, availableWidth / (maxX - minX)));
+      stage.scale({ x: scale, y: scale });
+      stage.position({ x: left + ARTBOARD_BASE_X - minX * scale, y: ARTBOARD_BASE_Y - minY * scale });
     }
     stage.batchDraw();
     syncDOM({ persist: false });
+  }
+
+  function resetPageView() {
+    autoFitting = true;
+    clearTimeout(autoFitTimer);
+    autoFitTimer = setTimeout(stopAutoFit, AUTO_FIT_QUIET_MS);
+    fitPageTopLeft(documentStore.get());
+  }
+
+  function stopAutoFit() {
+    autoFitting = false;
+  }
+
+  function showPage(documentState) {
+    const page = documentState.ui.activePage;
+    if (page === currentPage) {
+      if (autoFitting) resetPageView();
+      return;
+    }
+    const firstPage = currentPage === undefined;
+    if (!firstPage) writeCamera();
+    currentPage = page;
+    const stored = firstPage ? readStoredCamera(page) : null;
+    const pageArtboards = pageArtboardsOf(documentState);
+    if (stored && (!pageArtboards.length || cameraShowsAnyArtboard(stored, pageArtboards))) {
+      stage.scale({ x: stored.scale, y: stored.scale });
+      stage.position({ x: stored.x, y: stored.y });
+      stage.batchDraw();
+      syncDOM({ persist: false });
+    } else {
+      resetPageView();
+    }
   }
 
   function getSinglePinnedId(documentState) {
@@ -839,6 +884,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }
 
   function fitClientRect(rect) {
+    stopAutoFit();
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
     const worldX = (rect.left - worldRect.left) / scale;
@@ -986,6 +1032,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     render,
     refreshComments,
     centerOn,
+    resetPageView,
     fitGroup,
     navigateToCanvasNode,
     showCopyToast,

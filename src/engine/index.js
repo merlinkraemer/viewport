@@ -67,6 +67,10 @@ function mountViewport({
     return pages.some((page) => page.id === slug) ? slug : null;
   }
 
+  function hashTargetsBoard() {
+    return decodeURIComponent(window.location.hash.slice(1)).split('?')[0].includes('/');
+  }
+
   function resolvePage(preferred) {
     if (pages.length < 2) return null;
     if (pages.some((page) => page.id === preferred)) return preferred;
@@ -85,7 +89,7 @@ function mountViewport({
 
   const bootstrapDoc = loadInitialDocument(activeRegistry);
   const linkedPage = pageFromHash();
-  if (linkedPage && linkedPage !== bootstrapDoc.ui.activePage && !bootstrapDoc.ui.expanded.includes(pageNodeKey(linkedPage))) {
+  if (linkedPage && hashTargetsBoard() && !bootstrapDoc.ui.expanded.includes(pageNodeKey(linkedPage))) {
     bootstrapDoc.ui.expanded.push(pageNodeKey(linkedPage));
   }
   bootstrapDoc.ui.activePage = resolvePage(linkedPage ?? bootstrapDoc.ui.activePage);
@@ -117,7 +121,7 @@ function mountViewport({
 
   window.addEventListener('hashchange', () => {
     const page = pageFromHash();
-    if (page) selectPage(page, { expand: true });
+    if (page) selectPage(page, { expand: hashTargetsBoard() });
   });
 
   const pinSidebar = createPinSidebar({
@@ -169,7 +173,15 @@ function mountViewport({
 
   const sidebar = createSidebar({
     build,
-    onSelectPage: (page) => selectPage(page),
+    onSelectPage(page) {
+      selectPage(page);
+      if (documentStore.get().ui.focusGroup !== null) {
+        documentStore.mutate((draft) => {
+          draft.ui.focusGroup = null;
+        });
+      }
+      canvas.resetPageView();
+    },
     onToggleNode(key) {
       documentStore.mutate((draft) => {
         const expanded = new Set(draft.ui.expanded);
