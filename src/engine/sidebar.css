@@ -188,9 +188,12 @@
 .sidebar-item-label {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .sidebar-item:hover,
@@ -713,15 +716,6 @@ button.sidebar-section-toggle:hover .sidebar-section-toggle-icon {
 
 .sidebar-project-list--collapsed {
   display: none;
-}
-
-.sidebar-item-meta {
-  color: var(--ff-faint);
-  font-size: var(--ff-type-small);
-  line-height: 1.2;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
 }
 
 .sidebar-item--artboard:hover .sidebar-item-actions,

@@ -1,4 +1,4 @@
-import { setEngineConfig, artboardGroup, LAYER_GROUPS, listPages } from './config.js';
+import { setEngineConfig, artboardGroup, listPages, sortGroups, groupLabel, shortTitle } from './config.js';
 import { createCanvas } from './canvas.js';
 import { createSidebar, pageNodeKey } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
@@ -292,6 +292,8 @@ function mountViewport({
         page: artboard.page,
         group: artboardGroup(regEntry || { layer }),
       };
+      modelEntry.shortTitle = shortTitle(artboard.sourceTitle, { page: artboard.page, group: modelEntry.group });
+      modelEntry.groupLabel = groupLabel(modelEntry.group, artboard.page);
       if (!artboard.archived) artboardsByProject[artboard.projectId]?.push(modelEntry);
       else if (!activePage || artboard.page === activePage) archivedArtboards.push(modelEntry);
     });
@@ -301,11 +303,10 @@ function mountViewport({
     });
     archivedArtboards.sort((a, b) => a.id.localeCompare(b.id));
 
-    const namedGroups = [...new Set(activeRegistry.map((entry) => entry.group).filter(Boolean))];
     return {
       pages,
       activePage,
-      groupOrder: [...namedGroups, ...LAYER_GROUPS],
+      groupOrder: sortGroups(activeRegistry),
       focusGroup: documentState.ui.focusGroup,
       projects: documentState.projects,
       activeProjectId: documentState.ui.activeProjectId,
