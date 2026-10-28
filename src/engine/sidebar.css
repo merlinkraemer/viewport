@@ -108,7 +108,12 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  cursor: default;
+  cursor: pointer;
+}
+
+.sidebar-area {
+  display: flex;
+  align-items: center;
 }
 
 .sidebar-area:first-child {

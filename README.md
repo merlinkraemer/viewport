@@ -106,7 +106,13 @@ Pages can be grouped by area in one optional file, `viewport/areas.json`, next t
 { "Foundations": ["controls-lab", "displays"], "Views": ["mixer", "device-view"] }
 ```
 
-The sidebar shows each area name as a quiet header above its pages. Pages not listed go under a final "Other" area; without the file there are no headers. Unknown page ids are ignored.
+An area can also be written `{ "pages": [...], "collapsed": true }` to start folded:
+
+```json
+{ "Views": ["mixer"], "Archive": { "pages": ["round-1", "round-2"], "collapsed": true } }
+```
+
+The sidebar shows each area name as a quiet header above its pages. Click a header to fold or unfold its pages; the folded state is saved with the rest of the UI state, and once you have toggled an area your choice wins over `collapsed`. Selecting a page inside a folded area (for example via `#round-1`) unfolds it. Pages not listed go under a final "Other" area; without the file there are no headers. Unknown page ids are ignored.
 
 The sidebar is one tree: page → group → artboard, every node collapsed until opened. Artboard rows carry the card's number from the canvas. Right-click an artboard row to rename, pin, copy its id, open its comments or archive it. Click a page name to select it: the camera resets to the top-left of the page, fitted to its widest row (never below 40%). Only the chevron expands or folds. Selecting a page mounts only that page's cards: the others are removed from the DOM, so their animations and listeners stop and a large project stays fast. Clicking an artboard on another page selects that page first. Expanded nodes are saved with the rest of the UI state. The page is the first segment of the URL hash (`#checkout`), so a link opens that page, and expands it when a board follows (`#checkout/option-b?step=2`; the rest is left to the artboards). A reload restores the saved camera while it still shows a board; a sidebar click always resets it. With a single page its groups are the top level and every card is mounted.
 

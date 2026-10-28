@@ -255,10 +255,14 @@ function readAreas(content) {
   const file = areasPath(content);
   if (!exists(file)) return null;
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const valid = data && typeof data === 'object' && !Array.isArray(data)
-    && Object.values(data).every((ids) => Array.isArray(ids) && ids.every((id) => typeof id === 'string'));
-  if (!valid) throw new Error(`${file} must map area names to arrays of page ids`);
-  return Object.entries(data).map(([name, pages]) => ({ name, pages }));
+  const isPageList = (ids) => Array.isArray(ids) && ids.every((id) => typeof id === 'string');
+  const isArea = (value) => isPageList(value)
+    || (value && typeof value === 'object' && isPageList(value.pages) && (value.collapsed === undefined || typeof value.collapsed === 'boolean'));
+  const valid = data && typeof data === 'object' && !Array.isArray(data) && Object.values(data).every(isArea);
+  if (!valid) throw new Error(`${file} must map area names to arrays of page ids or { "pages": [...], "collapsed": true }`);
+  return Object.entries(data).map(([name, value]) => (
+    Array.isArray(value) ? { name, pages: value, collapsed: false } : { name, pages: value.pages, collapsed: value.collapsed === true }
+  ));
 }
 
 function commentsPath(content) {

@@ -35,6 +35,20 @@ export function groupNodeKey(page, group) {
   return `group:${page ?? ''}:${group}`;
 }
 
+export function areaOpenKey(name) {
+  return `area-open:${name}`;
+}
+
+export function areaClosedKey(name) {
+  return `area-closed:${name}`;
+}
+
+export function isAreaFolded(area, expanded) {
+  if (expanded.includes(areaOpenKey(area.name))) return false;
+  if (expanded.includes(areaClosedKey(area.name))) return true;
+  return Boolean(area.collapsed);
+}
+
 function getDisplayName(artboard) {
   return artboard.displayName || artboard.sourceTitle;
 }
@@ -250,10 +264,15 @@ export function createSidebar(options) {
     });
   }
 
-  function createAreaHeader(name) {
+  function createAreaHeader(section, folded) {
     const header = document.createElement('div');
     header.className = 'sidebar-area';
-    header.textContent = name;
+    header.dataset.area = section.name;
+    const label = document.createElement('span');
+    label.textContent = section.name;
+    const toggle = () => options.onToggleArea?.(section.name, folded);
+    header.append(createChevron(!folded, toggle), label);
+    header.addEventListener('click', toggle);
     return header;
   }
 
@@ -262,6 +281,7 @@ export function createSidebar(options) {
     const listed = new Set(model.areas.flatMap((area) => area.pages));
     const sections = model.areas.map((area) => ({
       name: area.name,
+      collapsed: area.collapsed,
       pages: area.pages.map((id) => model.pages.find((page) => page.id === id)).filter(Boolean),
     }));
     sections.push({ name: 'Other', pages: model.pages.filter((page) => !listed.has(page.id)) });
@@ -294,7 +314,9 @@ export function createSidebar(options) {
           .map((page) => ({ page, artboards: artboards.filter((artboard) => artboard.page === page.id) }))
           .filter((entry) => entry.artboards.length);
         if (!pageRows.length) return;
-        if (section.name) tree.appendChild(createAreaHeader(section.name));
+        const folded = Boolean(section.name) && isAreaFolded(section, model.ui?.expanded || []);
+        if (section.name) tree.appendChild(createAreaHeader(section, folded));
+        if (folded) return;
         pageRows.forEach(({ page, artboards: pageArtboards }) => {
           const open = expanded.has(pageNodeKey(page.id));
           tree.appendChild(createPageRow(page, open));

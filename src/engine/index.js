@@ -1,6 +1,6 @@
 import { setEngineConfig, artboardGroup, listPages, sortGroups, groupLabel, shortTitle } from './config.js';
 import { createCanvas } from './canvas.js';
-import { createSidebar, pageNodeKey } from './sidebar.js';
+import { areaClosedKey, areaOpenKey, createSidebar, isAreaFolded, pageNodeKey } from './sidebar.js';
 import { createPinSidebar } from './pin-sidebar.js';
 import { loadInitialDocument, createDocumentStore, clearStoredState } from './document-store.js';
 import { createCommentsStore } from './comments.js';
@@ -18,7 +18,7 @@ export { setEngineConfig };
  * @param {Array}   [options.layers]          taxonomy [{ key, label }]
  * @param {string}  [options.storageNamespace]
  * @param {string}  [options.defaultProjectName]
- * @param {Array}   [options.areas]           sidebar areas [{ name, pages: [pageId] }]; unlisted pages go under "Other"
+ * @param {Array}   [options.areas]           sidebar areas [{ name, pages: [pageId], collapsed? }]; unlisted pages go under "Other"
  * @param {object}  [options.build]           review build stamp { sha, dirty, builtAt, hash }; null in dev
  * @returns {{ documentStore, canvas, sidebar, pinSidebar, updateRegistry }}
  */
@@ -89,8 +89,15 @@ function mountViewport({
     }
   }
 
+  function withAreaUnfolded(expanded, page) {
+    const area = areas?.find((entry) => entry.pages.includes(page));
+    if (!area || !isAreaFolded(area, expanded)) return expanded;
+    return [...expanded.filter((key) => key !== areaClosedKey(area.name)), areaOpenKey(area.name)];
+  }
+
   const bootstrapDoc = loadInitialDocument(activeRegistry);
   const linkedPage = pageFromHash();
+  bootstrapDoc.ui.expanded = withAreaUnfolded(bootstrapDoc.ui.expanded, linkedPage);
   if (linkedPage && hashTargetsBoard() && !bootstrapDoc.ui.expanded.includes(pageNodeKey(linkedPage))) {
     bootstrapDoc.ui.expanded.push(pageNodeKey(linkedPage));
   }
@@ -106,8 +113,10 @@ function mountViewport({
     reflectPage(next);
     const { ui } = documentStore.get();
     const expandKey = expand && next && !ui.expanded.includes(pageNodeKey(next)) ? pageNodeKey(next) : null;
-    if (ui.activePage === next && !expandKey) return;
+    const areaUnfolds = withAreaUnfolded(ui.expanded, next) !== ui.expanded;
+    if (ui.activePage === next && !expandKey && !areaUnfolds) return;
     documentStore.mutate((draft) => {
+      draft.ui.expanded = withAreaUnfolded(draft.ui.expanded, next);
       if (draft.ui.activePage !== next) {
         draft.ui.activePage = next;
         draft.ui.focusGroup = null;
@@ -189,6 +198,13 @@ function mountViewport({
         const expanded = new Set(draft.ui.expanded);
         if (!expanded.delete(key)) expanded.add(key);
         draft.ui.expanded = [...expanded];
+      });
+    },
+    onToggleArea(name, folded) {
+      documentStore.mutate((draft) => {
+        const keys = draft.ui.expanded.filter((key) => key !== areaOpenKey(name) && key !== areaClosedKey(name));
+        keys.push(folded ? areaOpenKey(name) : areaClosedKey(name));
+        draft.ui.expanded = keys;
       });
     },
     onNavigateArtboard(artboardId) {
