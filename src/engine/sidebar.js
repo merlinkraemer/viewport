@@ -266,13 +266,26 @@ export function createSidebar(options) {
 
   function createAreaHeader(section, folded) {
     const header = document.createElement('div');
-    header.className = 'sidebar-area';
+    header.className = 'sidebar-row sidebar-area';
     header.dataset.area = section.name;
+    header.setAttribute('role', 'button');
+    header.tabIndex = 0;
+    header.setAttribute('aria-expanded', String(!folded));
+    const chevron = document.createElement('span');
+    chevron.className = 'sidebar-row__chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = folded ? '▸' : '▾';
     const label = document.createElement('span');
+    label.className = 'sidebar-row__label';
     label.textContent = section.name;
     const toggle = () => options.onToggleArea?.(section.name, folded);
-    header.append(createChevron(!folded, toggle), label);
+    header.append(chevron, label);
     header.addEventListener('click', toggle);
+    header.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggle();
+    });
     return header;
   }
 
