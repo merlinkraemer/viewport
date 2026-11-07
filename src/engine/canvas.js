@@ -42,7 +42,7 @@ function cameraKey(page) {
   return storageKey(page ? `camera:${page}` : 'camera');
 }
 
-function readStoredCamera(page) {
+function readStoredCamera(page, minScale) {
   try {
     const raw = localStorage.getItem(cameraKey(page));
     const camera = raw ? JSON.parse(raw) : null;
@@ -55,7 +55,7 @@ function readStoredCamera(page) {
       return {
         x: camera.x,
         y: camera.y,
-        scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, camera.scale)),
+        scale: Math.max(minScale, Math.min(MAX_SCALE, camera.scale)),
       };
     }
   } catch (err) {
@@ -636,7 +636,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const firstPage = currentPage === undefined;
     if (!firstPage) writeCamera();
     currentPage = page;
-    const stored = firstPage ? readStoredCamera(page) : null;
+    const stored = firstPage ? readStoredCamera(page, minScale()) : null;
     const pageArtboards = pageArtboardsOf(documentState);
     if (stored && (!pageArtboards.length || cameraShowsAnyArtboard(stored, pageArtboards))) {
       stage.scale({ x: stored.scale, y: stored.scale });
@@ -980,7 +980,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const availW = vpW * 0.8;
     const availH = vpH * 0.8;
     const fitScale = Math.min(availW / worldW, availH / worldH);
-    const newScale = Math.max(MIN_SCALE, Math.min(rect.maxScale ?? MAX_SCALE, fitScale));
+    const newScale = Math.max(minScale(), Math.min(rect.maxScale ?? MAX_SCALE, fitScale));
 
     const vpCenterX = leftWidth + vpW / 2;
     const vpCenterY = vpH / 2;
