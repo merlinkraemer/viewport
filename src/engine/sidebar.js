@@ -238,6 +238,10 @@ export function createSidebar(options) {
     row.append(createChevron(open, () => options.onToggleNode?.(pageNodeKey(page.id))), link);
     row.addEventListener('click', (event) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+      if (isPhone()) {
+        options.onToggleNode?.(pageNodeKey(page.id));
+        return;
+      }
       options.onSelectPage?.(page.id);
     });
     return row;
@@ -251,7 +255,13 @@ export function createSidebar(options) {
     row.classList.toggle('sidebar-row--active', focused);
     row.title = focused ? 'Show all groups' : `Show only ${group.label}`;
     row.append(createChevron(open, () => options.onToggleNode?.(nodeKey)), row.labelEl);
-    row.addEventListener('click', () => options.onFocusGroup?.(group.name, { page }));
+    row.addEventListener('click', () => {
+      if (isPhone()) {
+        options.onToggleNode?.(nodeKey);
+        return;
+      }
+      options.onFocusGroup?.(group.name, { page });
+    });
     return row;
   }
 
