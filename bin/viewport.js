@@ -9,6 +9,7 @@ import { createCommentsMiddleware } from './comments-api.js';
 import { COMMENTS_READ_STATE, commentsUsage, runComments } from './comments-cli.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DEFAULT_HOST = '127.0.0.1';
 const ENTRY_URL = '/@viewport/entry.js';
 const VIRTUAL_ENTRY_ID = '\0viewport-host-entry';
 
@@ -307,7 +308,7 @@ async function runDev(args) {
     plugins: [viewportVitePlugin(content), ...extraPlugins],
     resolve: { alias: designSystemAlias(content) },
     server: {
-      host: args.host,
+      host: args.host ?? DEFAULT_HOST,
       port: args.port,
       open: args.open,
       fs: {
@@ -418,7 +419,7 @@ async function runPreview(args) {
     configFile: false,
     build: { outDir },
     plugins: [commentsPreviewPlugin(content)],
-    preview: { host: args.host, port: args.port, open: args.open, strictPort: true },
+    preview: { host: args.host ?? DEFAULT_HOST, port: args.port, open: args.open, strictPort: true },
   });
   server.printUrls();
 }
