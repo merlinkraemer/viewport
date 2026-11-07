@@ -85,6 +85,10 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     return isPhone() ? PHONE_MIN_SCALE : MIN_SCALE;
   }
 
+  function getCanvasHeight() {
+    return isPhone() ? viewport.clientHeight : window.innerHeight;
+  }
+
   function getCanvasInsets() {
     if (isPhone()) return { left: 0, right: 0 };
     return {
@@ -136,7 +140,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     viewport.style.left = `${left}px`;
     viewport.style.right = `${right}px`;
     stage.width(getCanvasWidth());
-    stage.height(viewport.clientHeight || window.innerHeight);
+    stage.height(getCanvasHeight());
     stage.batchDraw();
     if (zoomUI) zoomUI.style.right = `${16 + right}px`;
     pinSidebar.refreshAll();
@@ -565,7 +569,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       x: (left - camera.x) / camera.scale,
       y: -camera.y / camera.scale,
       width: (window.innerWidth - left - right) / camera.scale,
-      height: (viewport.clientHeight || window.innerHeight) / camera.scale,
+      height: getCanvasHeight() / camera.scale,
     };
     return artboards.some((artboard) => {
       const { width, height } = cardSize(artboard);
