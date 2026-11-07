@@ -64,11 +64,13 @@ A group is one decision: its cards are the variations of one element, left to ri
 
 ## Comments
 
-The user comments on cards in the canvas; the comments land in `viewport/comments.json`, keyed by artboard id: `{ id, text, at, resolved }`. Read it at the start of each iteration.
+The user comments on cards in the canvas, usually from a phone; the comments land in `viewport/comments.json`, keyed by artboard id: `{ id, text, at, resolved, by? }`.
 
-- Open comments (`resolved: false`) are feedback on that card's file (the id maps to the file as above).
-- After acting on one, set `resolved: true`. To answer, append `{ "id": "<unique>", "text": "...", "at": "<ISO time>", "resolved": false, "by": "agent" }` to the same list, for example when you need a decision or want to say what changed.
-- Edit the file as JSON and keep it valid; the servers refuse to write over a broken file. Never delete the user's comments.
+**Every turn, run `npx viewport comments` first** and answer or act on every comment it prints, the same way you handle a user message. It lists only comments you have not seen (board id, author, time, the thread), then marks them read. `--peek` looks without marking, `--all` prints everything.
+
+- `npx viewport comments reply <board> "<text>"` answers on that board (written as `by: "agent"`). Say what you changed or what you need decided.
+- `npx viewport comments resolve <board> <comment id>` after you acted on one.
+- Open comments are feedback on that card's file (the id maps to the file as above). Never delete the user's comments; keep `comments.json` valid JSON.
 - A key `<artboard id>#<name>` is a comment on one variation inside that card: the element with `data-variant="<name>"`. Give every variation in a multi-variation card a stable `data-variant` name on its outermost element so the user can comment on it alone.
 
 ### Review workflow

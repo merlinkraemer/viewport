@@ -90,7 +90,27 @@ Comments live in `viewport/comments.json`, a file the agent reads and edits, key
 }
 ```
 
+An agent reads new comments with `npx viewport comments`, the per-turn feed. It prints each board's thread (id, author, time, text) with the unseen comments marked `NEW`, then records them in `viewport/.comments-read.json` (gitignored; `init` adds the line). Prints nothing when there is nothing new. Comments the agent wrote itself (`by: "agent"`) never count as new.
+
+```bash
+npx viewport comments                          # unseen comments, then mark them read
+npx viewport comments --peek                   # look without marking
+npx viewport comments --all                    # everything, read state untouched
+npx viewport comments reply <board> "Done: rows at 8px"   # answer, written as by "agent"
+npx viewport comments resolve <board> <comment id>
+```
+
 Both `npx viewport` and `npx viewport preview` serve `GET`/`POST`/`PATCH` on `__viewport/comments`, so a review build on a phone saves comments too. Each write rereads the file, so edits an agent made in between survive, and replaces it atomically. A file with broken JSON is never overwritten; the server answers 409 until it is fixed. Another static server shows comments read-only. In dev, an agent's edit to the file shows up live. Comments are not part of the build hash. Notes from older versions, kept in the browser, move into the file on the first load with a server.
+
+## Phone
+
+Under 760px the canvas switches to a touch layout (desktop is unchanged):
+
+- A top bar with a menu button opens the page tree as a slide-over drawer; it closes when you pick a page, group or board.
+- One finger pans, two fingers pinch-zoom around their midpoint, double-tap fits the tapped board to the screen width (again: fits the whole page). Opening a page or board fits it to the screen width, so a 1600px artboard is readable by zooming in. `Fit page` sits next to the zoom controls.
+- Tap a board to select it. A toolbar shows Comment, Copy id, Rename and Fit. Tapping a variation shows its comment bar.
+- Comments open as a bottom sheet with a 16px input (no iOS zoom) and a send button. Long-press a sidebar row for the context menu.
+- Pinning is desktop only.
 
 ## Review workflow
 
