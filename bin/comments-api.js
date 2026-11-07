@@ -13,7 +13,7 @@ class HttpError extends Error {
   }
 }
 
-async function readJsonObject(filePath) {
+export async function readJsonObject(filePath) {
   let raw;
   try {
     raw = await fs.readFile(filePath, 'utf8');
@@ -34,7 +34,7 @@ async function readJsonObject(filePath) {
   return data;
 }
 
-async function writeJsonObject(filePath, data) {
+export async function writeJsonObject(filePath, data) {
   const tmpPath = `${filePath}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
@@ -83,14 +83,19 @@ function createCommentId() {
   return `c-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
 }
 
-function addComment(data, body) {
+function optionalAuthor(value) {
+  const by = typeof value === 'string' ? value.trim().slice(0, 40) : '';
+  return by ? { by } : {};
+}
+
+export function addComment(data, body) {
   const artboardId = requireArtboardId(body);
-  const comment = { id: createCommentId(), text: requireText(body.text), at: new Date().toISOString(), resolved: false };
+  const comment = { id: createCommentId(), text: requireText(body.text), at: new Date().toISOString(), resolved: false, ...optionalAuthor(body.by) };
   data[artboardId] = [...(Array.isArray(data[artboardId]) ? data[artboardId] : []), comment];
   return comment;
 }
 
-function updateComment(data, body) {
+export function updateComment(data, body) {
   const artboardId = requireArtboardId(body);
   const comment = (Array.isArray(data[artboardId]) ? data[artboardId] : []).find((entry) => entry?.id === body.id);
   if (!comment) throw new HttpError(404, `No comment ${body.id} on ${artboardId}`);

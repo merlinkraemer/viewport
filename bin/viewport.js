@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, createServer, normalizePath, preview } from 'vite';
 import { createCommentsMiddleware } from './comments-api.js';
+import { COMMENTS_READ_STATE, commentsUsage, runComments } from './comments-cli.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY_URL = '/@viewport/entry.js';
@@ -19,11 +20,16 @@ Usage:
   viewport init                                          scaffold viewport/ in this project
   viewport build [--out viewport/dist]                   static review build + build.json
   viewport preview [--port 4182] [--host 0.0.0.0]        serve the review build
+  viewport comments [--peek] [--all]                     comments agents have not seen yet (see: viewport comments -h)
 `;
 }
 
 function parseArgs(argv) {
-  const args = { command: 'dev', open: true, host: undefined, port: undefined, out: undefined };
+  const args = { command: 'dev', open: true, host: undefined, port: undefined, out: undefined, rest: [] };
+  if (argv[0] === 'comments') {
+    const rest = argv.slice(1);
+    return { ...args, command: rest.includes('-h') || rest.includes('--help') ? 'comments-help' : 'comments', rest };
+  }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (['init', 'build', 'preview'].includes(arg)) args.command = arg;
@@ -189,7 +195,7 @@ function hostHtml() {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <title>Viewport</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -335,7 +341,7 @@ function listFiles(dir, skipDirs) {
 
 function contentHash(content, outDir) {
   const files = [
-    ...listFiles(content.viewportDir, [outDir]).filter((file) => file !== commentsPath(content)),
+    ...listFiles(content.viewportDir, [outDir]).filter((file) => file !== commentsPath(content) && path.basename(file) !== COMMENTS_READ_STATE),
     ...listFiles(path.join(packageRoot, 'src', 'engine'), []),
     ...[content.configPath, path.join(content.projectRoot, 'viewport.vite.js')].filter((file) => file && exists(file)),
   ].sort();
@@ -439,11 +445,12 @@ function updatePackageJson(cwd) {
 
 function ignoreReviewBuild(cwd) {
   const ignorePath = path.join(cwd, '.gitignore');
-  const line = 'viewport/dist/';
   const current = exists(ignorePath) ? fs.readFileSync(ignorePath, 'utf8') : '';
-  if (current.split('\n').some((entry) => entry.trim() === line)) return;
+  const missing = ['viewport/dist/', `viewport/${COMMENTS_READ_STATE}`]
+    .filter((line) => !current.split('\n').some((entry) => entry.trim() === line));
+  if (!missing.length) return;
   const separator = current && !current.endsWith('\n') ? '\n' : '';
-  fs.writeFileSync(ignorePath, `${current}${separator}${line}\n`);
+  fs.writeFileSync(ignorePath, `${current}${separator}${missing.join('\n')}\n`);
 }
 
 function runInit() {
@@ -462,7 +469,7 @@ function runInit() {
   updatePackageJson(cwd);
   ignoreReviewBuild(cwd);
   console.log(`Created viewport/ scaffold, viewport.config.js, agent skill .claude/skills/viewport/SKILL.md,
-package.json script "viewport" and .gitignore entry viewport/dist/.
+package.json script "viewport" and .gitignore entries viewport/dist/ and viewport/.comments-read.json.
 
 Next: npx viewport`);
 }
@@ -471,6 +478,14 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.command === 'help') {
     console.log(usage());
+    return;
+  }
+  if (args.command === 'comments-help') {
+    console.log(commentsUsage());
+    return;
+  }
+  if (args.command === 'comments') {
+    await runComments(resolveContentRoot(process.cwd()), args.rest);
     return;
   }
   if (args.command === 'init') {
