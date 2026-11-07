@@ -305,6 +305,7 @@ async function runDev(args) {
     root: content.projectRoot,
     configFile: false,
     appType: 'custom',
+    cacheDir: path.join(content.projectRoot, 'node_modules', `.vite-viewport-${args.port}`),
     plugins: [viewportVitePlugin(content), ...extraPlugins],
     resolve: { alias: designSystemAlias(content) },
     server: {
