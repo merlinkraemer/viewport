@@ -1,6 +1,6 @@
 const TAP_SLOP_PX = 10;
 const TAP_MAX_MS = 350;
-const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SLOP_PX = 32;
 const MOMENTUM_MIN_SPEED = 0.25;
 const MOMENTUM_FRICTION = 0.94;
@@ -153,7 +153,7 @@ export function attachTouchGestures({ element, getCamera, setCamera, minScale, m
       onDoubleTap?.(detail);
       return;
     }
-    lastTap = { x: tap.x, y: tap.y, t: tap.t };
+    lastTap = { x: tap.x, y: tap.y, t: event.timeStamp };
     onTap?.(detail);
   }
 
