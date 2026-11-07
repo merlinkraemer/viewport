@@ -98,6 +98,11 @@ export function createVariantBar({ mount, comments, onOpenComments }) {
   });
 
   return {
+    peek(target) {
+      if (locked) return;
+      const next = hit(target);
+      if (next?.el !== current?.el) show(next);
+    },
     refresh() {
       refresh();
       position();

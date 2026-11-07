@@ -214,3 +214,68 @@ body.sidebar-resizing {
   cursor: col-resize;
   user-select: none;
 }
+
+@media (max-width: 760px) {
+  .artboard-sidebar,
+  .artboard-sidebar.artboard-sidebar--hidden {
+    z-index: 97;
+    width: min(86vw, 340px) !important;
+    transform: translateX(-100%);
+    pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  body.drawer-open .artboard-sidebar {
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .artboard-sidebar {
+    -webkit-touch-callout: none;
+  }
+
+  .sidebar-resize {
+    display: none;
+  }
+
+  .sidebar-scroll {
+    padding: var(--ff-space-4) var(--ff-space-3);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .sidebar-row {
+    height: 44px;
+    padding-right: var(--ff-space-5);
+  }
+
+  .sidebar-row__chevron {
+    width: 32px;
+    margin-right: 0;
+    font-size: 12px;
+  }
+
+  .sidebar-row--page,
+  .sidebar-row--group,
+  .sidebar-row--artboard,
+  .sidebar-row--archive {
+    font-size: 14px;
+  }
+
+  .sidebar-area {
+    font-size: 12px;
+  }
+
+  .sidebar-row__num {
+    font-size: 12px;
+  }
+
+  .sidebar-empty,
+  .sidebar-footer {
+    font-size: 12px;
+  }
+
+  .sidebar-footer {
+    height: 40px;
+  }
+}

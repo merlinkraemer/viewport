@@ -1,5 +1,6 @@
 import './comments.css';
 import { storageKey } from './config.js';
+import { isPhone } from './phone.js';
 
 const PANEL_WIDTH = 300;
 const EDGE = 8;
@@ -175,7 +176,17 @@ export function createCommentThread(store, { onClose } = {}) {
     position();
   }
 
+  function keepAboveKeyboard() {
+    if (!panel || !isPhone() || !window.visualViewport) return;
+    const { height, offsetTop } = window.visualViewport;
+    panel.style.setProperty('--sheet-bottom', `${Math.max(0, window.innerHeight - height - offsetTop)}px`);
+  }
+
   function position() {
+    if (panel && isPhone()) {
+      keepAboveKeyboard();
+      return;
+    }
     if (!panel || !anchor?.isConnected) return;
     const rect = anchor.getBoundingClientRect();
     const left = Math.min(Math.max(EDGE, rect.right - PANEL_WIDTH), window.innerWidth - PANEL_WIDTH - EDGE);
@@ -205,13 +216,15 @@ export function createCommentThread(store, { onClose } = {}) {
     errorText = '';
     document.removeEventListener('pointerdown', onOutside, true);
     document.removeEventListener('keydown', onKey);
+    window.visualViewport?.removeEventListener('resize', keepAboveKeyboard);
+    window.visualViewport?.removeEventListener('scroll', keepAboveKeyboard);
     if (wasOpen) onClose?.();
   }
 
   function build() {
     panel = document.createElement('div');
     panel.className = 'comment-thread';
-    panel.style.width = `${PANEL_WIDTH}px`;
+    if (!isPhone()) panel.style.width = `${PANEL_WIDTH}px`;
 
     const header = document.createElement('div');
     header.className = 'comment-thread-header';
@@ -224,7 +237,7 @@ export function createCommentThread(store, { onClose } = {}) {
 
     composer = document.createElement('textarea');
     composer.className = 'comment-input';
-    composer.placeholder = 'Add a comment… (Enter)';
+    composer.placeholder = isPhone() ? 'Add a comment…' : 'Add a comment… (Enter)';
     composer.value = drafts[artboardId] || '';
     composer.addEventListener('input', () => setDraft(artboardId, composer.value));
     const add = () => {
@@ -235,10 +248,10 @@ export function createCommentThread(store, { onClose } = {}) {
         composer.value = '';
         setDraft(artboardId, '');
         composer.blur();
-        close();
+        if (!isPhone()) close();
       });
     };
-    submitOnEnter(composer, add);
+    if (!isPhone()) submitOnEnter(composer, add);
     addBtn = button('comment-action comment-action--primary', 'Comment', add);
 
     const footer = document.createElement('div');
@@ -263,7 +276,9 @@ export function createCommentThread(store, { onClose } = {}) {
     render();
     document.addEventListener('pointerdown', onOutside, true);
     document.addEventListener('keydown', onKey);
-    requestAnimationFrame(() => composer?.focus());
+    window.visualViewport?.addEventListener('resize', keepAboveKeyboard);
+    window.visualViewport?.addEventListener('scroll', keepAboveKeyboard);
+    if (!isPhone()) requestAnimationFrame(() => composer?.focus());
     store.load();
   }
 

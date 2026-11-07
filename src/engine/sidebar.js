@@ -1,3 +1,4 @@
+import { isPhone } from './phone.js';
 import {
   showConfirmDialog,
   showContextMenu,
@@ -6,6 +7,39 @@ import {
 } from './sidebar-context-menu.js';
 
 const ARCHIVE_NODE_KEY = 'archive';
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 10;
+
+function onLongPress(row, handler) {
+  let timer = null;
+  let start = null;
+  let fired = false;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  row.addEventListener('pointerdown', (event) => {
+    if (event.pointerType !== 'touch') return;
+    fired = false;
+    start = { x: event.clientX, y: event.clientY };
+    timer = setTimeout(() => {
+      fired = true;
+      handler({ clientX: start.x, clientY: start.y, preventDefault() {}, stopPropagation() {} });
+    }, LONG_PRESS_MS);
+  });
+  row.addEventListener('pointermove', (event) => {
+    if (timer && Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_SLOP_PX) cancel();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((type) => row.addEventListener(type, cancel));
+  row.addEventListener('click', (event) => {
+    if (!fired) return;
+    fired = false;
+    event.stopImmediatePropagation();
+  }, true);
+  row.addEventListener('contextmenu', (event) => {
+    if (isPhone()) event.preventDefault();
+  });
+}
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -184,6 +218,7 @@ export function createSidebar(options) {
     row.append(num, row.labelEl);
     row.addEventListener('click', () => options.onNavigateArtboard?.(artboard.id));
     row.addEventListener('contextmenu', (event) => showContextMenu(event, artboardMenu(artboard)));
+    onLongPress(row, (event) => showContextMenu(event, artboardMenu(artboard)));
     return row;
   }
 

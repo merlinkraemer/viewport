@@ -8,10 +8,16 @@ import { storageKey, artboardGroup, groupLabel } from './config.js';
 import { createProjectFrame } from './project-frame.js';
 import { showRenameDialog } from './sidebar-context-menu.js';
 import { layoutPages, readingOrder, GROUP_HEADER_HEIGHT, BAND_PADDING } from './layout.js';
+import { isPhone } from './phone.js';
+import { attachTouchGestures } from './touch-gestures.js';
 
 const PINCH_DELTA_CAP = 10;
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 4;
+const PHONE_MIN_SCALE = 0.08;
+const PHONE_MAX_FIT_SCALE = 2;
+const PHONE_MARGIN = 12;
+const PHONE_PAGE_FLOOR = 0.2;
 const READABLE_MIN_SCALE = 0.4;
 const AUTO_FIT_QUIET_MS = 1500;
 const SNAP = 8;
@@ -58,7 +64,7 @@ function readStoredCamera(page) {
   return null;
 }
 
-export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange }) {
+export function createCanvas({ viewport, documentStore, pinSidebar, registry, comments, onSelectActiveArtboard, onOpenComments, onCameraChange, onSelectionChange, onTapContent }) {
   let currentPage;
   let autoFitting = false;
   let autoFitTimer = null;
@@ -75,7 +81,12 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   let leftSidebarOpen = true;
   let pinPanelOpen = true;
 
+  function minScale() {
+    return isPhone() ? PHONE_MIN_SCALE : MIN_SCALE;
+  }
+
   function getCanvasInsets() {
+    if (isPhone()) return { left: 0, right: 0 };
     return {
       left: leftSidebarOpen ? leftSidebarWidth : 0,
       right: pinSidebarPinned && pinPanelOpen ? pinSidebarWidth : 0,
@@ -125,7 +136,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     viewport.style.left = `${left}px`;
     viewport.style.right = `${right}px`;
     stage.width(getCanvasWidth());
-    stage.height(window.innerHeight);
+    stage.height(viewport.clientHeight || window.innerHeight);
     stage.batchDraw();
     if (zoomUI) zoomUI.style.right = `${16 + right}px`;
     pinSidebar.refreshAll();
@@ -162,6 +173,8 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     document.body.appendChild(btn);
     return btn;
   }
+
+  viewport.classList.add('canvas-mount');
 
   const stage = new Konva.Stage({
     container: viewport,
@@ -229,6 +242,11 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   stage.on('dragmove', syncDOM);
   stage.on('dragend', syncDOM);
 
+  viewport.addEventListener('scroll', () => {
+    viewport.scrollTop = 0;
+    viewport.scrollLeft = 0;
+  });
+
   function clientToWorld(clientX, clientY) {
     const worldRect = world.getBoundingClientRect();
     const scale = stage.scaleX();
@@ -244,7 +262,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const px = clientX - r.left;
     const py = clientY - r.top;
     const oldScale = stage.scaleX();
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+    const newScale = Math.max(minScale(), Math.min(MAX_SCALE, nextScale));
     const mousePointTo = {
       x: (px - stage.x()) / oldScale,
       y: (py - stage.y()) / oldScale,
@@ -286,6 +304,49 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault();
   }, { passive: false });
 
+  function setCamera({ x, y, scale }) {
+    stopAutoFit();
+    stage.scale({ x: scale, y: scale });
+    stage.position({ x, y });
+    stage.batchDraw();
+    syncDOM();
+  }
+
+  function handleTap({ target }) {
+    onTapContent?.(target);
+    const cardEl = target instanceof Element ? target.closest('.ff-card') : null;
+    selectedIds.clear();
+    if (cardEl?.dataset.artboardId) selectedIds.add(cardEl.dataset.artboardId);
+    applySelection();
+  }
+
+  function handleDoubleTap({ target }) {
+    const cardEl = target instanceof Element ? target.closest('.ff-card') : null;
+    const id = cardEl?.dataset.artboardId;
+    if (id && !boardIsFitted(cardEl)) {
+      selectedIds.clear();
+      selectedIds.add(id);
+      applySelection();
+      fitClientRect(cardEl.getBoundingClientRect());
+      return;
+    }
+    fitWholePage();
+  }
+
+  const touchGestures = attachTouchGestures({
+    element: viewport,
+    getCamera: () => ({ x: stage.x(), y: stage.y(), scale: stage.scaleX() }),
+    setCamera,
+    minScale,
+    maxScale: MAX_SCALE,
+    onStart: () => {
+      stopAutoFit();
+      touchGestures.cancelMomentum();
+    },
+    onTap: handleTap,
+    onDoubleTap: handleDoubleTap,
+  });
+
   let gestureStartScale = null;
   document.addEventListener('gesturestart', (e) => {
     e.preventDefault();
@@ -293,7 +354,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   }, { passive: false });
   document.addEventListener('gesturechange', (e) => {
     e.preventDefault();
-    if (gestureStartScale === null || e.timeStamp - lastPinchWheelAt < 200) return;
+    if (gestureStartScale === null || e.timeStamp - lastPinchWheelAt < 200 || touchGestures.isTouching()) return;
     if (!viewport.contains(e.target)) return;
     zoomAt(e.clientX, e.clientY, gestureStartScale * e.scale);
   }, { passive: false });
@@ -504,7 +565,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       x: (left - camera.x) / camera.scale,
       y: -camera.y / camera.scale,
       width: (window.innerWidth - left - right) / camera.scale,
-      height: window.innerHeight / camera.scale,
+      height: (viewport.clientHeight || window.innerHeight) / camera.scale,
     };
     return artboards.some((artboard) => {
       const { width, height } = cardSize(artboard);
@@ -518,28 +579,37 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
       .filter((artboard) => !artboard.archived && !artboard.orphaned && onActivePage(documentState, artboard));
   }
 
-  function fitPageTopLeft(documentState) {
+  function pageFitCamera(documentState, { floor, margin, topMargin }) {
     const artboards = pageArtboardsOf(documentState);
-    const { left, right } = getCanvasInsets();
-    if (!artboards.length) {
-      stage.scale({ x: 1, y: 1 });
-      stage.position({ x: left + ARTBOARD_BASE_X, y: ARTBOARD_BASE_Y });
-    } else {
-      const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
-      const rects = [
-        ...artboards.map((artboard) => ({ ...artboard.position, ...cardSize(artboard) })),
-        ...bands,
-      ];
-      const minX = Math.min(...rects.map((rect) => rect.x));
-      const minY = Math.min(...rects.map((rect) => rect.y));
-      const maxX = Math.max(...rects.map((rect) => rect.x + rect.width));
-      const availableWidth = window.innerWidth - left - right - ARTBOARD_BASE_X * 2;
-      const scale = Math.max(READABLE_MIN_SCALE, Math.min(1, availableWidth / (maxX - minX)));
-      stage.scale({ x: scale, y: scale });
-      stage.position({ x: left + ARTBOARD_BASE_X - minX * scale, y: ARTBOARD_BASE_Y - minY * scale });
-    }
+    const { left } = getCanvasInsets();
+    if (!artboards.length) return { scale: 1, x: left + margin, y: topMargin };
+    const bands = documentState.projects.flatMap((project) => getGroupBands(documentState, project.id));
+    const rects = [
+      ...artboards.map((artboard) => ({ ...artboard.position, ...cardSize(artboard) })),
+      ...bands,
+    ];
+    const minX = Math.min(...rects.map((rect) => rect.x));
+    const minY = Math.min(...rects.map((rect) => rect.y));
+    const maxX = Math.max(...rects.map((rect) => rect.x + rect.width));
+    const availableWidth = getCanvasWidth() - margin * 2;
+    const scale = Math.max(floor, Math.min(1, availableWidth / (maxX - minX)));
+    return { scale, x: left + margin - minX * scale, y: topMargin - minY * scale };
+  }
+
+  function fitPageTopLeft(documentState) {
+    const camera = isPhone()
+      ? pageFitCamera(documentState, { floor: PHONE_PAGE_FLOOR, margin: PHONE_MARGIN, topMargin: PHONE_MARGIN })
+      : pageFitCamera(documentState, { floor: READABLE_MIN_SCALE, margin: ARTBOARD_BASE_X, topMargin: ARTBOARD_BASE_Y });
+    stage.scale({ x: camera.scale, y: camera.scale });
+    stage.position({ x: camera.x, y: camera.y });
     stage.batchDraw();
     syncDOM({ persist: false });
+  }
+
+  function fitWholePage() {
+    stopAutoFit();
+    const camera = pageFitCamera(documentStore.get(), { floor: minScale(), margin: PHONE_MARGIN, topMargin: PHONE_MARGIN });
+    animateCanvasTo(camera.scale, camera.x, camera.y);
   }
 
   function resetPageView() {
@@ -892,6 +962,12 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     const worldW = rect.width / scale;
     const worldH = rect.height / scale;
 
+    if (isPhone()) {
+      const camera = phoneFitCamera({ worldX, worldY, worldW, worldH }, rect.maxScale);
+      animateCanvasTo(camera.scale, camera.x, camera.y);
+      return;
+    }
+
     const leftWidth = documentStore.get().ui.leftSidebarOpen !== false ? leftSidebarWidth : 0;
     const rightWidth = pinSidebar.isActive() && documentStore.get().ui.pinPanelOpen !== false ? pinSidebar.getWidth() : 0;
     const vpW = window.innerWidth - leftWidth - rightWidth;
@@ -910,6 +986,29 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     animateCanvasTo(newScale, vpCenterX - centerX * newScale, vpCenterY - centerY * newScale);
   }
 
+  function phoneFitCamera({ worldX, worldY, worldW, worldH }, maxFitScale = PHONE_MAX_FIT_SCALE) {
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+    const scale = Math.max(minScale(), Math.min(maxFitScale, PHONE_MAX_FIT_SCALE, (vw - PHONE_MARGIN * 2) / worldW));
+    const height = worldH * scale;
+    return {
+      scale,
+      x: (vw - worldW * scale) / 2 - worldX * scale,
+      y: height <= vh - PHONE_MARGIN * 2 ? (vh - height) / 2 - worldY * scale : PHONE_MARGIN - worldY * scale,
+    };
+  }
+
+  function boardIsFitted(cardEl) {
+    const target = phoneFitCamera({ worldX: 0, worldY: 0, worldW: cardEl.offsetWidth, worldH: cardEl.offsetHeight });
+    return Math.abs(stage.scaleX() - target.scale) < target.scale * 0.03;
+  }
+
+  function fitBoard(id) {
+    const entry = cards.get(id ?? [...selectedIds][0]);
+    if (!entry) return;
+    fitClientRect(entry.element.getBoundingClientRect());
+  }
+
   function centerOn(id) {
     const entry = cards.get(id);
     if (!entry) return;
@@ -920,6 +1019,7 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     cards.forEach((entry, id) => {
       entry.element.classList.toggle('ff-card--selected', selectedIds.has(id));
     });
+    onSelectionChange?.([...selectedIds]);
   }
 
   function clearSelection() {
@@ -960,11 +1060,21 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
   const zoomOut = document.createElement('button');
   zoomOut.textContent = '−';
+  function stepZoom(factor) {
+    const cur = stage.scaleX();
+    const newScale = Math.max(minScale(), Math.min(MAX_SCALE, cur * factor));
+    if (!isPhone()) {
+      animateCanvasTo(newScale, stage.x(), stage.y());
+      return;
+    }
+    const cx = viewport.clientWidth / 2;
+    const cy = viewport.clientHeight / 2;
+    animateCanvasTo(newScale, cx - ((cx - stage.x()) / cur) * newScale, cy - ((cy - stage.y()) / cur) * newScale);
+  }
+
   zoomOut.addEventListener('click', (e) => {
     e.stopPropagation();
-    const cur = stage.scaleX();
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cur / 1.3));
-    animateCanvasTo(newScale, stage.x(), stage.y());
+    stepZoom(1 / 1.3);
   });
 
   zoomLevel = document.createElement('span');
@@ -975,14 +1085,13 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   zoomIn.textContent = '+';
   zoomIn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const cur = stage.scaleX();
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cur * 1.3));
-    animateCanvasTo(newScale, stage.x(), stage.y());
+    stepZoom(1.3);
   });
 
   const zoomFit = document.createElement('button');
   zoomFit.textContent = '⊡';
   zoomFit.title = 'Reset';
+  zoomFit.className = 'zoom-reset';
   zoomFit.addEventListener('click', (e) => {
     e.stopPropagation();
     animateCanvasTo(1, 0, 0);
@@ -992,6 +1101,15 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
   zoomUI.appendChild(zoomLevel);
   zoomUI.appendChild(zoomIn);
   zoomUI.appendChild(zoomFit);
+
+  const zoomFitPage = document.createElement('button');
+  zoomFitPage.textContent = 'Fit page';
+  zoomFitPage.className = 'zoom-fit-page';
+  zoomFitPage.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fitWholePage();
+  });
+  zoomUI.appendChild(zoomFitPage);
   document.body.appendChild(zoomUI);
 
   const hint = document.createElement('div');
@@ -1016,6 +1134,10 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
 
     showPage(nextDocument);
     renderProjectFrames(nextDocument);
+    [...selectedIds].forEach((id) => {
+      if (!cards.has(id)) selectedIds.delete(id);
+    });
+    applySelection();
     applyPinSidebar(nextDocument);
     applyCanvasLayout();
   }
@@ -1037,6 +1159,23 @@ export function createCanvas({ viewport, documentStore, pinSidebar, registry, co
     navigateToCanvasNode,
     showCopyToast,
     copyIds,
+    fitBoard,
+    fitWholePage,
+    selectedIds: () => [...selectedIds],
+    clearSelection,
+    getTitle(id) {
+      const artboard = documentStore.get().artboards[id];
+      return artboard ? getDisplayTitle(artboard) : id;
+    },
+    renameBoard(id) {
+      const artboard = documentStore.get().artboards[id];
+      if (!artboard) return;
+      showRenameDialog(getDisplayTitle(artboard), (value) => {
+        documentStore.mutate((draft) => {
+          if (draft.artboards[id]) draft.artboards[id].displayName = value;
+        });
+      });
+    },
     refreshArtboard,
     refreshArtboards(ids) {
       ids.forEach(refreshArtboard);

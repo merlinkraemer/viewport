@@ -8,6 +8,7 @@ import { createCommentThread } from './comment-thread.js';
 import { createVariantBar } from './review.js';
 import { readingOrder } from './layout.js';
 import { copyText } from './dom.js';
+import { createPhoneUi } from './phone-ui.js';
 
 export { setEngineConfig };
 
@@ -142,8 +143,21 @@ function mountViewport({
   });
   document.body.appendChild(pinSidebar.element);
 
+  let phoneUi = null;
+
+  function syncBoardToolbar() {
+    const [id] = canvas.selectedIds();
+    if (!id || !documentStore.get().artboards[id]) {
+      phoneUi.hideBoard();
+      return;
+    }
+    const list = comments.list(id);
+    phoneUi.showBoard(canvas.getTitle(id), comments.openCount(id), list.length);
+  }
+
   const comments = createCommentsStore({
     onChange() {
+      syncBoardToolbar();
       commentThread.refresh();
       variantBar.refresh();
       canvas.refreshComments();
@@ -176,15 +190,32 @@ function mountViewport({
     comments,
     onSelectActiveArtboard: (id) => sidebar.setActiveArtboard(id),
     onOpenComments: openComments,
+    onSelectionChange: () => syncBoardToolbar(),
+    onTapContent: (target) => variantBar.peek(target),
     onCameraChange: () => {
       commentThread.reposition();
       variantBar.reposition();
     },
   });
 
+  phoneUi = createPhoneUi({
+    onFitBoard: () => canvas.fitBoard(),
+    onComment: (anchor) => {
+      const [id] = canvas.selectedIds();
+      if (id) openComments(id, anchor);
+    },
+    onCopyId: () => canvas.copyIds(canvas.selectedIds()),
+    onRename: () => {
+      const [id] = canvas.selectedIds();
+      if (id) canvas.renameBoard(id);
+    },
+    onClearSelection: () => canvas.clearSelection(),
+  });
+
   const sidebar = createSidebar({
     build,
     onSelectPage(page) {
+      phoneUi.closeDrawer();
       selectPage(page);
       if (documentStore.get().ui.focusGroup !== null) {
         documentStore.mutate((draft) => {
@@ -208,10 +239,12 @@ function mountViewport({
       });
     },
     onNavigateArtboard(artboardId) {
+      phoneUi.closeDrawer();
       selectPageOf(artboardId);
       canvas.centerOn(artboardId);
     },
     onFocusGroup(group, { page } = {}) {
+      phoneUi.closeDrawer();
       if (page) selectPage(page);
       const next = documentStore.get().ui.focusGroup === group ? null : group;
       documentStore.mutate((draft) => {
@@ -279,6 +312,7 @@ function mountViewport({
       });
     },
     onOpenComments(artboardId) {
+      phoneUi.closeDrawer();
       selectPageOf(artboardId);
       canvas.centerOn(artboardId);
       openComments(artboardId);
@@ -347,12 +381,20 @@ function mountViewport({
     };
   }
 
+  function reflectPhoneTitle(state) {
+    const label = pages.find((page) => page.id === state.ui.activePage)?.label;
+    phoneUi.setTitle(label || baseTitle);
+  }
+
   documentStore.subscribe((state) => {
+    reflectPhoneTitle(state);
+    syncBoardToolbar();
     canvas.render(state);
     sidebar.render(buildSidebarModel(state));
   });
 
   const initialState = documentStore.get();
+  reflectPhoneTitle(initialState);
   canvas.render(initialState);
   sidebar.render(buildSidebarModel(initialState));
 
